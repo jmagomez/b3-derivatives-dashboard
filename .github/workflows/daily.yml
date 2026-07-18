@@ -1,0 +1,51 @@
+name: Atualizacao diaria + e-mail (20h BRT)
+
+on:
+  schedule:
+    - cron: "0 23 * * *"   # 23:00 UTC = 20:00 BRT
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Atualizar dados e gerar site/e-mail
+        run: python scripts/update.py
+
+      - name: Commit dos dados atualizados
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data docs
+          git diff --cached --quiet || git commit -m "Atualizacao diaria $(date -u +%F)"
+          git push
+
+      - name: Enviar e-mail
+        if: env.MAIL_USERNAME != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Derivativos B3 — resumo diario"
+          to: jmagomez@gmail.com
+          from: "Dashboard Derivativos B3"
+          html_body: file://email_body.html
