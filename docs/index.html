@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Derivativos B3 — Dashboard Diário</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0f1420;--card:#1a2233;--txt:#e8ecf4;--muted:#8b96ab;--acc:#4f8ef7;--up:#2ecc71;--dn:#e74c3c}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--txt)}
+  header{padding:20px 24px 8px}
+  h1{margin:0;font-size:22px}
+  .sub{color:var(--muted);font-size:13px;margin-top:4px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;padding:14px 24px}
+  .card{background:var(--card);border-radius:10px;padding:12px 14px}
+  .card .lbl{font-size:12px;color:var(--muted)}
+  .card .val{font-size:20px;font-weight:600;margin-top:2px}
+  .card .var{font-size:12px;margin-top:2px}
+  nav{display:flex;gap:6px;padding:6px 24px;flex-wrap:wrap}
+  nav button{background:var(--card);color:var(--txt);border:1px solid #2a3550;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px}
+  nav button.on{background:var(--acc);border-color:var(--acc)}
+  .panel{display:none;padding:12px 24px 32px}
+  .panel.on{display:block}
+  .chartbox{background:var(--card);border-radius:10px;padding:14px;margin-bottom:14px}
+  .chartbox h3{margin:0 0 8px;font-size:14px;color:var(--muted);font-weight:500}
+  canvas{max-height:340px}
+  footer{color:var(--muted);font-size:12px;padding:0 24px 24px}
+  a{color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Derivativos B3 — Dashboard Diário</h1>
+  <div class="sub" id="sub">Carregando…</div>
+</header>
+<div class="cards" id="cards"></div>
+<nav id="nav"></nav>
+<div id="panels"></div>
+<footer>
+  Fontes: B3 (ajustes do pregão, Sistema Pregão) e Banco Central (SGS). Dados diários desde 01/01/2020.
+  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Uso informativo — não é recomendação de investimento.
+</footer>
+<script>
+const TABS = [
+  ["juros","Juros (DI)"],["cambio","Câmbio"],["ibov","Ibovespa"],
+  ["commod","Commodities"],["cupom","Cupom cambial"],["opcoes","Opções"],["macro","Indicadores BCB"]
+];
+const nf = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2});
+Chart.defaults.color = '#8b96ab';
+Chart.defaults.borderColor = 'rgba(139,150,171,.15)';
+
+function lineChart(ctx, datasets, opts={}) {
+  return new Chart(ctx, {type:'line', data:{datasets},
+    options:{responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{boxWidth:12}}},
+      elements:{point:{radius:0}},
+      scales:{x:{type:'category',ticks:{maxTicksLimit:10}}, y:{ticks:{callback:v=>nf.format(v)}, ...(opts.y||{})}},
+      ...opts.extra}});
+}
+function ds(label,serie,color,yKey='value'){
+  return {label, data:serie.map(p=>({x:p.date??p.venc, y:p[yKey]})), borderColor:color, backgroundColor:color, borderWidth:1.6, tension:.15};
+}
+function box(panel, title){
+  const b=document.createElement('div');b.className='chartbox';
+  b.innerHTML=`<h3>${title}</h3><canvas></canvas>`;panel.appendChild(b);
+  return b.querySelector('canvas');
+}
+
+async function main(){
+  const [series,curve,bcb,opcoes,summary] = await Promise.all(
+    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json'].map(f=>fetch('data/'+f).then(r=>r.ok?r.json():null).catch(()=>null)));
+
+  document.getElementById('sub').textContent = summary?.last_date ?
+    `Último pregão: ${summary.last_date} · atualizado ${summary.generated_at?.replace('T',' ')}` : 'Sem dados ainda — aguarde o primeiro backfill.';
+
+  // cards
+  const cards=document.getElementById('cards');
+  (summary?.items||[]).forEach(it=>{
+    const isDI = it.code==='DI1';
+    const v = it.var_pct;
+    const vTxt = v==null?'-':(v>=0?'+':'')+nf.format(v)+(isDI?' p.p.':'%');
+    const el=document.createElement('div');el.className='card';
+    el.innerHTML=`<div class="lbl">${it.label} (${it.venc||''})</div>
+      <div class="val">${nf.format(it.value)}${isDI?'%':''}</div>
+      <div class="var" style="color:${v==null?'#8b96ab':(v>=0?'var(--up)':'var(--dn)')}">${vTxt}</div>`;
+    cards.appendChild(el);
+  });
+
+  // tabs
+  const nav=document.getElementById('nav'), panels=document.getElementById('panels');
+  const panelEls={};
+  TABS.forEach(([id,label],i)=>{
+    const btn=document.createElement('button');btn.textContent=label;
+    btn.onclick=()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+      btn.classList.add('on');panelEls[id].classList.add('on');};
+    if(i===0)btn.classList.add('on');
+    nav.appendChild(btn);
+    const p=document.createElement('div');p.className='panel'+(i===0?' on':'');panels.appendChild(p);panelEls[id]=p;
+  });
+
+  const S = code => series?.[code]?.serie || [];
+
+  // Juros
+  if(curve?.curve?.length){
+    const c=box(panelEls.juros,`Curva de juros DI — ${curve.ref}` + (curve.ref_old?` vs ${curve.ref_old}`:''));
+    const dsets=[ds('Curva atual',curve.curve.map(p=>({date:p.venc,value:p.rate})),'#4f8ef7')];
+    if(curve.curve_old?.length) dsets.push(ds('1 ano atrás',curve.curve_old.map(p=>({date:p.venc,value:p.rate})),'#8b96ab'));
+    lineChart(c,dsets);
+  }
+  if(S('DI1').length) lineChart(box(panelEls.juros,'DI ~1 ano — taxa implícita (% a.a.)'),[ds('DI ~1a',S('DI1'),'#4f8ef7')]);
+
+  // Câmbio
+  if(S('DOL').length) lineChart(box(panelEls.cambio,'Dólar futuro (1º vencimento) — R$/US$ mil'),[ds('DOL',S('DOL'),'#f7b84f')]);
+  if(bcb?.ptax_venda?.length) lineChart(box(panelEls.cambio,'PTAX venda — R$/US$'),[ds('PTAX',bcb.ptax_venda,'#2ecc71')]);
+
+  // Ibovespa
+  if(S('IND').length) lineChart(box(panelEls.ibov,'Ibovespa futuro (1º vencimento) — pontos'),[ds('IND',S('IND'),'#4f8ef7')]);
+
+  // Commodities
+  [['BGI','Boi gordo (R$/@)','#e67e22'],['CCM','Milho (R$/saca)','#f1c40f'],['ICF','Café arábica (US$/saca)','#8e5a3b'],['SJC','Soja (US$/saca)','#2ecc71']]
+    .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.commod,t+' — 1º vencimento'),[ds(code,S(code),color)]); });
+
+  // Cupom
+  [['DDI','Cupom cambial DDI (PU)','#4f8ef7'],['FRC','FRA de cupom FRC (PU)','#9b59b6']]
+    .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.cupom,t+' — 1º vencimento'),[ds(code,S(code),color)]); });
+
+  // Opções
+  if(opcoes?.length){
+    const byM={};
+    opcoes.forEach(r=>{(byM[r.mercadoria]=byM[r.mercadoria]||[]).push({date:r.date,value:r.contratos_abertos,vol:r.volume});});
+    const colors={IND:'#4f8ef7',DOL:'#f7b84f'};
+    lineChart(box(panelEls.opcoes,'Opções — contratos em aberto (IND e DOL)'),
+      Object.entries(byM).map(([m,s])=>ds('Opções '+m,s,colors[m]||'#8e44ad')));
+    lineChart(box(panelEls.opcoes,'Opções — volume financeiro negociado'),
+      Object.entries(byM).map(([m,s])=>ds('Vol '+m,s,colors[m]||'#8e44ad','vol')));
+    const note=document.createElement('p');note.style.color='#8b96ab';note.style.fontSize='12px';
+    note.textContent='Série acumulada a partir da criação do repositório (histórico completo de opções não é disponibilizado gratuitamente pela B3 em formato agregado).';
+    panelEls.opcoes.appendChild(note);
+  } else {
+    panelEls.opcoes.innerHTML='<p style="color:#8b96ab">Sem dados de opções ainda.</p>';
+  }
+
+  // Macro
+  if(bcb?.cdi?.length) lineChart(box(panelEls.macro,'CDI diário (% a.d.)'),[ds('CDI',bcb.cdi,'#4f8ef7')]);
+  if(bcb?.selic?.length) lineChart(box(panelEls.macro,'Selic diária (% a.d.)'),[ds('Selic',bcb.selic,'#2ecc71')]);
+  if(bcb?.ipca?.length) lineChart(box(panelEls.macro,'IPCA mensal (%)'),[ds('IPCA',bcb.ipca,'#e74c3c')]);
+}
+main();
+</script>
+</body>
+</html>
