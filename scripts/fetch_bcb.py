@@ -11,6 +11,7 @@ SERIES = {
     "selic": 11,      # Selic diaria (% a.d.)
     "ptax_venda": 1,  # Dolar PTAX venda
     "ipca": 433,      # IPCA mensal (% a.m.)
+    "ibov": 7,        # Ibovespa - fechamento diario (pontos)
 }
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "bcb")
 URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados"
@@ -18,7 +19,7 @@ URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados"
 
 def fetch_series(code: int, start: dt.date, end: dt.date) -> pd.DataFrame:
     frames = []
-    # buscamos ano a ano por robustez (API limita janelas longas)
+    # API limita a 10 anos por chamada; buscamos ano a ano por robustez
     d = start
     while d <= end:
         chunk_end = min(dt.date(d.year, 12, 31), end)
