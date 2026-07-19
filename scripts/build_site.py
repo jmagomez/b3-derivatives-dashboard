@@ -69,19 +69,25 @@ def di_rate(pu: float, ref: dt.date, mat: dt.date):
     return round(((100000.0 / pu) ** (252.0 / bu) - 1) * 100, 3)
 
 
+def row_rate(r, ref):
+    if "taxa" in r and pd.notna(r.get("taxa")):
+        return round(float(r["taxa"]), 3)
+    return di_rate(r["ajuste_atual"], ref, r["mat"])
+
+
 def di_curve(df: pd.DataFrame, ref_date: str) -> list:
     sub = df[(df["codigo"] == "DI1") & (df["date"] == ref_date)].copy()
     ref = dt.date.fromisoformat(ref_date)
     out = []
     for _, r in sub.sort_values("mat").iterrows():
-        rate = di_rate(r["ajuste_atual"], ref, r["mat"])
+        rate = row_rate(r, ref)
         if rate is not None and 0 < rate < 60:
             out.append({"venc": r["vencimento"], "mat": r["mat"].isoformat(), "rate": rate})
     return out
 
 
 def di_front_rate_series(df: pd.DataFrame) -> list:
-    """Taxa implicita do DI com ~1 ano de prazo (contrato mais proximo de 252 du)."""
+    """Taxa implicita do DI com ~1 ano de prazo (contrato jan mais proximo de 252 du)."""
     sub = df[df["codigo"] == "DI1"].copy()
     out = []
     for date, g in sub.groupby("date"):
@@ -93,7 +99,7 @@ def di_front_rate_series(df: pd.DataFrame) -> list:
             continue
         g["dist"] = (g["du"] - 252).abs()
         r = g.sort_values("dist").iloc[0]
-        rate = di_rate(r["ajuste_atual"], ref, r["mat"])
+        rate = row_rate(r, ref)
         if rate is not None and 0 < rate < 60:
             out.append({"date": date, "value": rate, "venc": r["vencimento"]})
     return sorted(out, key=lambda x: x["date"])
