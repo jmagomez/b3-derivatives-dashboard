@@ -130,7 +130,7 @@ async function main(){
   }
   if(S('DI1').length) lineChart(box(panelEls.juros,'DI ~1 ano — taxa implícita (% a.a.)'),[ds('DI ~1a',S('DI1'),'#4f8ef7')]);
 
-  // Dâmbio
+  // Câmbio
   if(S('DOL').length) lineChart(box(panelEls.cambio,'Dólar futuro (1º vencimento) — R$/US$ mil'),[ds('DOL',S('DOL'),'#f7b84f')]);
   if(bcb?.ptax_venda?.length) lineChart(box(panelEls.cambio,'PTAX venda — R$/US$'),[ds('PTAX',bcb.ptax_venda,'#2ecc71')]);
 
