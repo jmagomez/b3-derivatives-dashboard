@@ -14,6 +14,7 @@ jobs:
     env:
       MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
       MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD_B3 }}
+      EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
       PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v4
