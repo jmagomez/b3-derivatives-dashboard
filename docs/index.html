@@ -39,13 +39,14 @@
 <nav id="nav"></nav>
 <div id="panels"></div>
 <footer>
-  Fontes: B3 (arquivo público Up2Data — negócios consolidados) e Banco Central (SGS). Contratos B3: ~12 meses retroativos (limite da B3); indicadores BCB desde 01/01/2020.
-  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Uso informativo — não é recomendação de investimento.
+  Fontes: B3 (arquivo público Up2Data — negócios consolidados), Banco Central (SGS) e EIA (U.S. Energy Information Administration — Brent Dated, WTI Spot e produtos). Contratos B3: ~12 meses retroativos (limite da B3); indicadores BCB e EIA desde 01/01/2020.
+  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Não há fonte gratuita para a curva de futuros ICE Brent/CME WTI (dados de settlement por vencimento são pagos) — por isso a aba Petróleo mostra apenas preços à vista. Os crack spreads usam benchmarks americanos (NY Harbor / US Gulf Coast, EIA) contra o Brent, por falta de fonte europeia gratuita equivalente. Uso informativo — não é recomendação de investimento.
 </footer>
 <script>
 const TABS = [
   ["juros","Juros (DI)"],["cambio","Câmbio"],["ibov","Ibovespa"],
-  ["commod","Commodities"],["cupom","Cupom cambial"],["opcoes","Opções"],["macro","Indicadores BCB"]
+  ["commod","Commodities"],["cupom","Cupom cambial"],["petroleo","Petróleo"],
+  ["opcoes","Opções"],["macro","Indicadores BCB"]
 ];
 const nf = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2});
 Chart.defaults.color = '#8b96ab';
@@ -77,8 +78,8 @@ function resizeVisibleCharts(){
 }
 
 async function main(){
-  const [series,curve,bcb,opcoes,summary] = await Promise.all(
-    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json'].map(f=>fetch('data/'+f).then(r=>r.ok?r.json():null).catch(()=>null)));
+  const [series,curve,bcb,opcoes,summary,eia] = await Promise.all(
+    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json','eia.json'].map(f=>fetch('data/'+f).then(r=>r.ok?r.json():null).catch(()=>null)));
 
   document.getElementById('sub').textContent = summary?.last_date ?
     `Último pregão: ${summary.last_date} · atualizado ${summary.generated_at?.replace('T',' ')}` : 'Sem dados ainda — aguarde o primeiro backfill.';
@@ -137,6 +138,27 @@ async function main(){
   [['DDI','Cupom cambial DDI (PU)','#4f8ef7'],['FRC','FRA de cupom FRC (PU)','#9b59b6']]
     .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.cupom,t+' — 1º vencimento'),[ds(code,S(code),color)]); });
 
+  // Petroleo (Brent Dated / WTI Spot + crack spreads)
+  if(eia?.brent?.length || eia?.wti?.length){
+    const dsets=[];
+    if(eia.brent?.length) dsets.push(ds('Brent Dated',eia.brent,'#2ecc71'));
+    if(eia.wti?.length) dsets.push(ds('WTI Spot',eia.wti,'#f7b84f'));
+    lineChart(box(panelEls.petroleo,'Brent Dated e WTI Spot — US$/barril (EIA, à vista)'),dsets);
+  }
+  if(eia?.crack_gasoline?.length || eia?.crack_diesel?.length || eia?.crack_jet?.length){
+    const cdsets=[];
+    if(eia.crack_gasoline?.length) cdsets.push(ds('Crack gasolina',eia.crack_gasoline,'#f7b84f'));
+    if(eia.crack_diesel?.length) cdsets.push(ds('Crack diesel',eia.crack_diesel,'#4f8ef7'));
+    if(eia.crack_jet?.length) cdsets.push(ds('Crack jet fuel',eia.crack_jet,'#9b59b6'));
+    lineChart(box(panelEls.petroleo,'Crack spreads vs Brent — US$/barril (produto×42 − Brent)'),cdsets);
+    const note=document.createElement('p');note.style.color='#8b96ab';note.style.fontSize='12px';
+    note.textContent='Produtos (gasolina, diesel/heating oil, jet fuel) são benchmarks americanos (NY Harbor / US Gulf Coast, EIA), não europeus. Sem fonte gratuita para a curva de futuros ICE Brent/CME WTI.';
+    panelEls.petroleo.appendChild(note);
+  }
+  if(!eia?.brent?.length && !eia?.wti?.length){
+    panelEls.petroleo.innerHTML='<p style="color:#8b96ab">Sem dados de petróleo ainda (configure o secret EIA_API_KEY).</p>';
+  }
+
   // Opções
   if(opcoes?.length){
     const byM={};
@@ -155,7 +177,7 @@ async function main(){
 
   // Macro
   if(bcb?.cdi?.length) lineChart(box(panelEls.macro,'CDI diário (% a.d.)'),[ds('CDI',bcb.cdi,'#4f8ef7')]);
-  if(bcb?.selic?.length) lineChart(box(panelEls.macro,'Selic diária (% a.d.)'),[ds('Selic',bcb.selic,'#2ecc71')]);
+  if(bcb?.selic?.length) lineChart(box(panelEls.macro,'Selic diário (% a.d.)'),[ds('Selic',bcb.selic,'#2ecc71')]);
   if(bcb?.ipca?.length) lineChart(box(panelEls.macro,'IPCA mensal (%)'),[ds('IPCA',bcb.ipca,'#e74c3c')]);
 }
 main();
