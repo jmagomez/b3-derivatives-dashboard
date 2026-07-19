@@ -3,6 +3,7 @@ import datetime as dt
 
 import fetch_b3
 import fetch_bcb
+import fetch_eia
 import build_site
 import build_email
 
@@ -11,5 +12,6 @@ if __name__ == "__main__":
     # janela de seguranca de 10 dias p/ recuperar falhas anteriores
     fetch_b3.update_range(today - dt.timedelta(days=10), today)
     fetch_bcb.update()
+    fetch_eia.update()
     build_site.main()
     build_email.main()
