@@ -17,6 +17,7 @@
   .card .lbl{font-size:12px;color:var(--muted)}
   .card .val{font-size:20px;font-weight:600;margin-top:2px}
   .card .var{font-size:12px;margin-top:2px}
+  .card .ref{font-size:11px;color:#5a6478;margin-top:4px}
   nav{display:flex;gap:6px;padding:6px 24px;flex-wrap:wrap}
   nav button{background:var(--card);color:var(--txt);border:1px solid #2a3550;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px}
   nav button.on{background:var(--acc);border-color:var(--acc)}
@@ -40,7 +41,7 @@
 <div id="panels"></div>
 <footer>
   Fontes: B3 (arquivo público Up2Data — negócios consolidados), Banco Central (SGS) e EIA (U.S. Energy Information Administration — Brent Dated, WTI Spot e produtos). Contratos B3: ~12 meses retroativos (limite da B3); indicadores BCB e EIA desde 01/01/2020.
-  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Não há fonte gratuita para a curva de futuros ICE Brent/CME WTI (dados de settlement por vencimento são pagos) — por isso a aba Petróleo mostra apenas preços à vista. Os crack spreads usam benchmarks americanos (NY Harbor / US Gulf Coast, EIA) contra o Brent, por falta de fonte europeia gratuita equivalente. Uso informativo — não é recomendação de investimento.
+  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Não há fonte gratuita para a curva de futuros ICE Brent/CME WTI (dados de settlement por vencimento são pagos) — por isso a aba Petróleo mostra apenas preços à vista. Os crack spreads usam benchmarks americanos (NY Harbor / US Gulf Coast, EIA) contra o Brent, por falta de fonte europeia gratuita equivalente. Cada indicador mostra sua própria data de referência, pois as fontes (B3, BCB, EIA) publicam com atrasos diferentes. Uso informativo — não é recomendação de investimento.
 </footer>
 <script>
 const TABS = [
@@ -53,6 +54,12 @@ Chart.defaults.color = '#8b96ab';
 Chart.defaults.borderColor = 'rgba(139,150,171,.15)';
 
 const allCharts = [];
+
+function fmtDate(iso){
+  if(!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
 
 function lineChart(ctx, datasets, opts={}) {
   const chart = new Chart(ctx, {type:'line', data:{datasets},
@@ -93,7 +100,8 @@ async function main(){
     const el=document.createElement('div');el.className='card';
     el.innerHTML=`<div class="lbl">${it.label} (${it.venc||''})</div>
       <div class="val">${nf.format(it.value)}${isDI?'%':''}</div>
-      <div class="var" style="color:${v==null?'#8b96ab':(v>=0?'var(--up)':'var(--dn)')}">${vTxt}</div>`;
+      <div class="var" style="color:${v==null?'#8b96ab':(v>=0?'var(--up)':'var(--dn)')}">${vTxt}</div>
+      <div class="ref">Ref.: ${fmtDate(it.date)}</div>`;
     cards.appendChild(el);
   });
 
@@ -122,7 +130,7 @@ async function main(){
   }
   if(S('DI1').length) lineChart(box(panelEls.juros,'DI ~1 ano — taxa implícita (% a.a.)'),[ds('DI ~1a',S('DI1'),'#4f8ef7')]);
 
-  // Câmbio
+  // Dâmbio
   if(S('DOL').length) lineChart(box(panelEls.cambio,'Dólar futuro (1º vencimento) — R$/US$ mil'),[ds('DOL',S('DOL'),'#f7b84f')]);
   if(bcb?.ptax_venda?.length) lineChart(box(panelEls.cambio,'PTAX venda — R$/US$'),[ds('PTAX',bcb.ptax_venda,'#2ecc71')]);
 
@@ -152,7 +160,7 @@ async function main(){
     if(eia.crack_jet?.length) cdsets.push(ds('Crack jet fuel',eia.crack_jet,'#9b59b6'));
     lineChart(box(panelEls.petroleo,'Crack spreads vs Brent — US$/barril (produto×42 − Brent)'),cdsets);
     const note=document.createElement('p');note.style.color='#8b96ab';note.style.fontSize='12px';
-    note.textContent='Produtos (gasolina, diesel/heating oil, jet fuel) são benchmarks americanos (NY Harbor / US Gulf Coast, EIA), não europeus. Sem fonte gratuita para a curva de futuros ICE Brent/CME WTI.';
+    note.textContent='Produtos (gasolina, diesel/heating oil, jet fuel) são benchmarks americanos (NY Harbor / US Gulf Coast, EIA), não europeus. Sem fonte gratuita para a curva de futuros ICE Brent/CME WTI. Os dados da EIA costumam ter alguns dias de atraso em relação aos preços de mercado em tempo real.';
     panelEls.petroleo.appendChild(note);
   }
   if(!eia?.brent?.length && !eia?.wti?.length){
