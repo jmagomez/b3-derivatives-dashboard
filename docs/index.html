@@ -38,7 +38,7 @@
 <nav id="nav"></nav>
 <div id="panels"></div>
 <footer>
-  Fontes: B3 (ajustes do pregão, Sistema Pregão) e Banco Central (SGS). Dados diários desde 01/01/2020.
+  Fontes: B3 (arquivo público Up2Data — negócios consolidados) e Banco Central (SGS). Contratos B3: ~12 meses retroativos (limite da B3); indicadores BCB desde 01/01/2020.
   Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Uso informativo — não é recomendação de investimento.
 </footer>
 <script>
@@ -117,6 +117,7 @@ async function main(){
 
   // Ibovespa
   if(S('IND').length) lineChart(box(panelEls.ibov,'Ibovespa futuro (1º vencimento) — pontos'),[ds('IND',S('IND'),'#4f8ef7')]);
+  if(bcb?.ibov?.length) lineChart(box(panelEls.ibov,'Ibovespa à vista — fechamento (desde 2020, BCB)'),[ds('IBOV',bcb.ibov,'#2ecc71')]);
 
   // Commodities
   [['BGI','Boi gordo (R$/@)','#e67e22'],['CCM','Milho (R$/saca)','#f1c40f'],['ICF','Café arábica (US$/saca)','#8e5a3b'],['SJC','Soja (US$/saca)','#2ecc71']]
@@ -129,14 +130,14 @@ async function main(){
   // Opções
   if(opcoes?.length){
     const byM={};
-    opcoes.forEach(r=>{(byM[r.mercadoria]=byM[r.mercadoria]||[]).push({date:r.date,value:r.contratos_abertos,vol:r.volume});});
+    opcoes.forEach(r=>{(byM[r.mercadoria]=byM[r.mercadoria]||[]).push({date:r.date,value:r.contratos_negociados,vol:r.volume});});
     const colors={IND:'#4f8ef7',DOL:'#f7b84f'};
-    lineChart(box(panelEls.opcoes,'Opções — contratos em aberto (IND e DOL)'),
+    lineChart(box(panelEls.opcoes,'Opções — contratos negociados por dia'),
       Object.entries(byM).map(([m,s])=>ds('Opções '+m,s,colors[m]||'#8e44ad')));
     lineChart(box(panelEls.opcoes,'Opções — volume financeiro negociado'),
       Object.entries(byM).map(([m,s])=>ds('Vol '+m,s,colors[m]||'#8e44ad','vol')));
     const note=document.createElement('p');note.style.color='#8b96ab';note.style.fontSize='12px';
-    note.textContent='Série acumulada a partir da criação do repositório (histórico completo de opções não é disponibilizado gratuitamente pela B3 em formato agregado).';
+    note.textContent='Volume agregado de opções por mercadoria (DI1/IDI, DOL, IND, agro), a partir do arquivo público da B3 (~12 meses retroativos).';
     panelEls.opcoes.appendChild(note);
   } else {
     panelEls.opcoes.innerHTML='<p style="color:#8b96ab">Sem dados de opções ainda.</p>';
