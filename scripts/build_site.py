@@ -11,6 +11,7 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 AJUSTES_DIR = os.path.join(ROOT, "data", "ajustes")
 BCB_DIR = os.path.join(ROOT, "data", "bcb")
 OPCOES = os.path.join(ROOT, "data", "opcoes.csv")
+EIA_CSV = os.path.join(ROOT, "data", "eia.csv")
 OUT = os.path.join(ROOT, "docs", "data")
 
 MONTH = {"F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
@@ -105,6 +106,38 @@ def di_front_rate_series(df: pd.DataFrame) -> list:
     return sorted(out, key=lambda x: x["date"])
 
 
+def series_points(df: pd.DataFrame, col: str) -> list:
+    sub = df[["date", col]].dropna()
+    return [{"date": d.strftime("%Y-%m-%d"), "value": round(float(v), 3)} for d, v in zip(sub["date"], sub[col])]
+
+
+def eia_payload() -> dict:
+    """Brent Dated + WTI Spot (EIA) e crack spreads dos produtos vs Brent.
+
+    Nao ha fonte gratuita para a curva de futuros (ICE Brent / CME WTI) -
+    usamos apenas precos a vista. Crack spread = produto($/gal)*42 - Brent($/bbl).
+    """
+    if not os.path.exists(EIA_CSV):
+        return {}
+    df = pd.read_csv(EIA_CSV, parse_dates=["date"]).sort_values("date")
+    out = {}
+    for col in ("brent", "wti"):
+        if col in df.columns:
+            out[col] = series_points(df, col)
+    if "brent" in df.columns:
+        for prod, key in (("gasoline", "crack_gasoline"), ("diesel", "crack_diesel"), ("jet_fuel", "crack_jet")):
+            if prod in df.columns:
+                sub = df[["date", "brent", prod]].dropna()
+                if sub.empty:
+                    continue
+                vals = sub[prod] * 42 - sub["brent"]
+                out[key] = [
+                    {"date": d.strftime("%Y-%m-%d"), "value": round(float(v), 3)}
+                    for d, v in zip(sub["date"], vals)
+                ]
+    return out
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     df = load_ajustes()
@@ -159,6 +192,28 @@ def main():
         opc = pd.read_csv(OPCOES).to_dict(orient="records")
     with open(os.path.join(OUT, "opcoes.json"), "w") as f:
         json.dump(opc, f)
+
+    eia = eia_payload()
+    with open(os.path.join(OUT, "eia.json"), "w") as f:
+        json.dump(eia, f)
+    if eia.get("brent"):
+        cur_b = eia["brent"][-1]
+        summary["items"].append({
+            "code": "BRENT", "label": "Brent Dated (EIA)", "date": cur_b["date"],
+            "value": cur_b["value"],
+            "prev": eia["brent"][-2]["value"] if len(eia["brent"]) >= 2 else None,
+            "var_pct": round((cur_b["value"] / eia["brent"][-2]["value"] - 1) * 100, 2) if len(eia["brent"]) >= 2 and eia["brent"][-2]["value"] else None,
+            "venc": None,
+        })
+    if eia.get("wti"):
+        cur_w = eia["wti"][-1]
+        summary["items"].append({
+            "code": "WTI", "label": "WTI Spot (EIA)", "date": cur_w["date"],
+            "value": cur_w["value"],
+            "prev": eia["wti"][-2]["value"] if len(eia["wti"]) >= 2 else None,
+            "var_pct": round((cur_w["value"] / eia["wti"][-2]["value"] - 1) * 100, 2) if len(eia["wti"]) >= 2 and eia["wti"][-2]["value"] else None,
+            "venc": None,
+        })
 
     with open(os.path.join(OUT, "summary.json"), "w") as f:
         json.dump(summary, f, ensure_ascii=False)
