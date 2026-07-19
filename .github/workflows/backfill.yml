@@ -17,6 +17,8 @@ jobs:
   backfill:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    env:
+      EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +35,12 @@ jobs:
           [ -z "$END" ] && END=$(date -u +%F)
           python scripts/fetch_b3.py "${{ github.event.inputs.start }}" "$END"
 
-      - name: Backfill BCB + rebuild site
+      - name: Backfill BCB + EIA + rebuild site
         run: |
+          END="${{ github.event.inputs.end }}"
+          [ -z "$END" ] && END=$(date -u +%F)
           python scripts/fetch_bcb.py
+          python scripts/fetch_eia.py "${{ github.event.inputs.start }}" "$END"
           cd scripts && python build_site.py && python build_email.py
 
       - name: Commit
