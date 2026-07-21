@@ -1,9 +1,13 @@
-name: Atualizacao diaria + e-mail (20h BRT)
+name: Atualizacao diaria + e-mail (23h BRT)
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 23:00 UTC = 20:00 BRT
+    - cron: "0 2 * * *"   # 02:00 UTC = 23:00 BRT (dia anterior)
   workflow_dispatch:
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
 
 permissions:
   contents: write
