@@ -1,6 +1,6 @@
 # Dashboard de Derivativos B3
 
-Dashboard diário dos principais contratos de derivativos e indicadores do mercado brasileiro, atualizado automaticamente às **20h (BRT)** com envio de resumo por e-mail.
+Dashboard diário dos principais contratos de derivativos e indicadores do mercado brasileiro, atualizado automaticamente às **23h (BRT)** com envio de resumo por e-mail.
 
 **Dashboard:** https://jmagomez.github.io/b3-derivatives-dashboard/
 
@@ -44,7 +44,7 @@ Dashboard diário dos principais contratos de derivativos e indicadores do merca
 
 ## Funcionamento
 
-- `daily.yml`: todo dia às 23:00 UTC (20:00 BRT) — busca o pregão (janela de recuperação de 10 dias; se o arquivo do dia ainda não estiver publicado, entra no dia seguinte), atualiza `data/`, regenera `docs/data/` e envia o e-mail.
+- `daily.yml`: todo dia às 02:00 UTC (23:00 BRT do dia anterior) — busca o pregão (janela de recuperação de 10 dias; se o arquivo do dia ainda não estiver publicado, entra no dia seguinte), atualiza `data/`, regenera `docs/data/` e envia o e-mail.
 - `backfill.yml`: preenche intervalos de datas (acionamento manual).
 
 ## Observações
