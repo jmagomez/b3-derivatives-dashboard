@@ -16,6 +16,15 @@ def fmt(v):
     return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def fmt_date(iso):
+    if not iso:
+        return "-"
+    s = str(iso)
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}/{s[5:7]}/{s[0:4]}"
+    return s
+
+
 def main():
     with open(SUMMARY) as f:
         s = json.load(f)
@@ -30,18 +39,20 @@ def main():
             f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>{it['label']}"
             f" <span style='color:#999;font-size:12px'>({it.get('venc') or ''})</span></td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right'>{fmt(it['value'])}</td>"
-            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:{color}'>{var_txt}</td></tr>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:{color}'>{var_txt}</td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:#999;font-size:12px'>{fmt_date(it.get('date'))}</td></tr>"
         )
     link = f"<p><a href='{PAGES_URL}' style='color:#1a56db'>Abrir dashboard completo</a></p>" if PAGES_URL else ""
     html = f"""
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px">
   <h2 style="margin-bottom:4px">Derivativos B3 — fechamento {last}</h2>
-  <p style="color:#666;margin-top:0">Precos de ajuste dos principais contratos futuros (fonte: B3).</p>
+  <p style="color:#666;margin-top:0">Precos de ajuste dos principais contratos futuros (fonte: B3). Cada linha mostra sua propria data de referencia, pois as fontes (B3, BCB, EIA) publicam com atrasos diferentes.</p>
   <table style="border-collapse:collapse;width:100%;font-size:14px">
     <tr style="background:#f5f5f5">
       <th style="padding:6px 10px;text-align:left">Contrato</th>
       <th style="padding:6px 10px;text-align:right">Ajuste</th>
       <th style="padding:6px 10px;text-align:right">Var. d/d</th>
+      <th style="padding:6px 10px;text-align:right">Ref.</th>
     </tr>
     {''.join(rows)}
   </table>
