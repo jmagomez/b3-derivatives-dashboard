@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Derivativos B3 — Dashboard Diário</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>
   :root{--bg:#0f1420;--card:#1a2233;--txt:#e8ecf4;--muted:#8b96ab;--acc:#4f8ef7;--up:#2ecc71;--dn:#e74c3c}
   *{box-sizing:border-box}
@@ -66,7 +67,7 @@ function lineChart(ctx, datasets, opts={}) {
     options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
       plugins:{legend:{labels:{boxWidth:12}}},
       elements:{point:{radius:0}},
-      scales:{x:{type:'category',ticks:{maxTicksLimit:10}}, y:{ticks:{callback:v=>nf.format(v)}, ...(opts.y||{})}},
+      scales:{x:{type:'time',time:{tooltipFormat:'dd/MM/yyyy'},ticks:{maxTicksLimit:10}}, y:{ticks:{callback:v=>nf.format(v)}, ...(opts.y||{})}},
       ...opts.extra}});
   allCharts.push(chart);
   return chart;
@@ -98,7 +99,7 @@ async function main(){
     const v = it.var_pct;
     const vTxt = v==null?'-':(v>=0?'+':'')+nf.format(v)+(isDI?' p.p.':'%');
     const el=document.createElement('div');el.className='card';
-    el.innerHTML=`<div class="lbl">${it.label} (${it.venc||''})</div>
+    el.innerHTML=`<div class="lbl">${it.label}${it.venc?' ('+it.venc+')':''}</div>
       <div class="val">${nf.format(it.value)}${isDI?'%':''}</div>
       <div class="var" style="color:${v==null?'#8b96ab':(v>=0?'var(--up)':'var(--dn)')}">${vTxt}</div>
       <div class="ref">Ref.: ${fmtDate(it.date)}</div>`;
@@ -124,8 +125,8 @@ async function main(){
   // Juros
   if(curve?.curve?.length){
     const c=box(panelEls.juros,`Curva de juros DI — ${curve.ref}` + (curve.ref_old?` vs ${curve.ref_old}`:''));
-    const dsets=[ds('Curva atual',curve.curve.map(p=>({date:p.venc,value:p.rate})),'#4f8ef7')];
-    if(curve.curve_old?.length) dsets.push(ds('1 ano atrás',curve.curve_old.map(p=>({date:p.venc,value:p.rate})),'#8b96ab'));
+    const dsets=[ds('Curva atual',curve.curve.map(p=>({date:p.mat,value:p.rate})),'#4f8ef7')];
+    if(curve.curve_old?.length) dsets.push(ds('1 ano atrás',curve.curve_old.map(p=>({date:p.mat,value:p.rate})),'#8b96ab'));
     lineChart(c,dsets);
   }
   if(S('DI1').length) lineChart(box(panelEls.juros,'DI ~1 ano — taxa implícita (% a.a.)'),[ds('DI ~1a',S('DI1'),'#4f8ef7')]);
