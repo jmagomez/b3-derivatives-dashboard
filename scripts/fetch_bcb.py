@@ -1,6 +1,7 @@
 """Series diarias/mensais do Banco Central (API SGS) - gratuitas e estaveis."""
 import os
 import sys
+import time
 import datetime as dt
 
 import pandas as pd
@@ -17,7 +18,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "bcb")
 URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados"
 
 
-def fetch_series(code: int, start: dt.date, end: dt.date) -> pd.DataFrame:
+def fetch_series(code: int, start: dt.date, end: dt.date, retries: int = 3) -> pd.DataFrame:
     frames = []
     # API limita a 10 anos por chamada; buscamos ano a ano por robustez
     d = start
@@ -28,9 +29,19 @@ def fetch_series(code: int, start: dt.date, end: dt.date) -> pd.DataFrame:
             "dataInicial": d.strftime("%d/%m/%Y"),
             "dataFinal": chunk_end.strftime("%d/%m/%Y"),
         }
-        r = requests.get(URL.format(code=code), params=params, timeout=60)
-        r.raise_for_status()
-        data = r.json()
+        last_err = None
+        data = None
+        for attempt in range(retries):
+            try:
+                r = requests.get(URL.format(code=code), params=params, timeout=60)
+                r.raise_for_status()
+                data = r.json()
+                break
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                time.sleep(3 * (attempt + 1))
+        else:
+            raise RuntimeError(f"Falha ao baixar serie {code} ({d}-{chunk_end}): {last_err}")
         if data:
             frames.append(pd.DataFrame(data))
         d = dt.date(d.year + 1, 1, 1)
