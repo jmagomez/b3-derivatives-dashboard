@@ -29,7 +29,7 @@ SERIES = {
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "eia.csv")
 
 
-def fetch_range(start: dt.date, end: dt.date, session=None) -> list:
+def fetch_range(start: dt.date, end: dt.date, session=None, retries: int = 3) -> list:
     session = session or requests.Session()
     rows = []
     offset = 0
@@ -48,9 +48,19 @@ def fetch_range(start: dt.date, end: dt.date, session=None) -> list:
         }
         for i, code in enumerate(SERIES):
             params[f"facets[series][{i}]"] = code
-        r = session.get(BASE, params=params, timeout=60)
-        r.raise_for_status()
-        data = r.json().get("response", {}).get("data", [])
+        last_err = None
+        data = None
+        for attempt in range(retries):
+            try:
+                r = session.get(BASE, params=params, timeout=60)
+                r.raise_for_status()
+                data = r.json().get("response", {}).get("data", [])
+                break
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                time.sleep(3 * (attempt + 1))
+        else:
+            raise RuntimeError(f"Falha ao baixar EIA offset={offset}: {last_err}")
         rows.extend(data)
         if len(data) < length:
             break
