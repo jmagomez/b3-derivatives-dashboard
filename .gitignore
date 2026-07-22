@@ -1,3 +1,27 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Segredos / ambiente
+.env
+.env.*
+!.env.example
+
+# Artefatos gerados
 email_body.html
+
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
