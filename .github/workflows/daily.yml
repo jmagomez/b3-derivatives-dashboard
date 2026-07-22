@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "0 2 * * *"   # 02:00 UTC = 23:00 BRT (dia anterior)
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - data/**
+      - docs/**
 
 concurrency:
   group: daily-update
