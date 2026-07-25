@@ -29,6 +29,21 @@ TRACKED = {
     "SJC": "Soja",
 }
 
+# Unidade de cada indicador, usada nos cards de resumo e nos tooltips dos graficos.
+UNITS = {
+    "DI1": "% a.a.",
+    "DOL": "R$/US$ mil",
+    "IND": "pontos",
+    "DDI": "PU",
+    "FRC": "PU",
+    "BGI": "R$/@",
+    "CCM": "R$/saca",
+    "ICF": "US$/saca",
+    "SJC": "US$/saca",
+    "BRENT": "US$/barril",
+    "WTI": "US$/barril",
+}
+
 
 def maturity(venc: str) -> dt.date:
     m = MONTH[venc[0]]
@@ -150,10 +165,9 @@ def main():
         for code, label in TRACKED.items():
             if code == "DI1":
                 serie = di_front_rate_series(df)
-                unit = "% a.a. (DI ~1 ano)"
             else:
                 serie = front_month_series(df, code)
-                unit = "pts/R$"
+            unit = UNITS.get(code, "")
             payload_series[code] = {"label": label, "unit": unit, "serie": serie}
             if len(serie) >= 2:
                 cur, prev = serie[-1], serie[-2]
@@ -163,7 +177,7 @@ def main():
                 elif prev["value"]:
                     var = round((cur["value"] / prev["value"] - 1) * 100, 2)
                 summary["items"].append({
-                    "code": code, "label": label, "date": cur["date"],
+                    "code": code, "label": label, "unit": unit, "date": cur["date"],
                     "value": cur["value"], "prev": prev["value"], "var_pct": var,
                     "venc": cur.get("venc"),
                 })
@@ -199,7 +213,7 @@ def main():
     if eia.get("brent"):
         cur_b = eia["brent"][-1]
         summary["items"].append({
-            "code": "BRENT", "label": "Brent Dated (EIA)", "date": cur_b["date"],
+            "code": "BRENT", "label": "Brent Dated (EIA)", "unit": UNITS["BRENT"], "date": cur_b["date"],
             "value": cur_b["value"],
             "prev": eia["brent"][-2]["value"] if len(eia["brent"]) >= 2 else None,
             "var_pct": round((cur_b["value"] / eia["brent"][-2]["value"] - 1) * 100, 2) if len(eia["brent"]) >= 2 and eia["brent"][-2]["value"] else None,
@@ -208,7 +222,7 @@ def main():
     if eia.get("wti"):
         cur_w = eia["wti"][-1]
         summary["items"].append({
-            "code": "WTI", "label": "WTI Spot (EIA)", "date": cur_w["date"],
+            "code": "WTI", "label": "WTI Spot (EIA)", "unit": UNITS["WTI"], "date": cur_w["date"],
             "value": cur_w["value"],
             "prev": eia["wti"][-2]["value"] if len(eia["wti"]) >= 2 else None,
             "var_pct": round((cur_w["value"] / eia["wti"][-2]["value"] - 1) * 100, 2) if len(eia["wti"]) >= 2 and eia["wti"][-2]["value"] else None,
