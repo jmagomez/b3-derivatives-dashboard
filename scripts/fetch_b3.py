@@ -19,7 +19,17 @@ import pandas as pd
 import requests
 
 BASE = "https://arquivos.b3.com.br/api/download"
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+SITE = "https://arquivos.b3.com.br/"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Accept": "application/json, text/plain, */*",
+    "Referer": SITE,
+}
+# Assinatura do TradeInformationConsolidatedFile: a 1a linha e o status do arquivo
+# e a 2a e o cabecalho das colunas. Serve para separar "a B3 devolveu o CSV" de
+# "a B3 devolveu uma pagina HTML de erro/limite de taxa".
+ASSINATURA = b"TckrSymb"
+
 FUT_RE = r"^(DI1|DOL|IND|DDI|FRC|BGI|CCM|ICF|SJC)([FGHJKMNQUVXZ]\d{2})$"
 OPT_RE = r"^(DI1|IDI|DOL|IND|BGI|CCM|ICF|SJC)([FGHJKMNQUVXZ]\d{2})[CP]\d+$"
 
@@ -31,36 +41,83 @@ FUT_COLS = ["date", "codigo", "vencimento", "ajuste_anterior", "ajuste_atual",
             "variacao", "taxa", "contratos", "volume"]
 
 
+class ArquivoIndisponivel(Exception):
+    """Nao existe arquivo para a data (feriado, fim de semana, fora da janela)."""
+
+
+class FalhaFonte(Exception):
+    """A B3 respondeu algo inesperado. E retentavel e NAO significa 'sem pregao'."""
+
+
+def nova_sessao() -> requests.Session:
+    """Sessao com cookies da B3. Cliente 'frio' costuma receber uma pagina HTML
+    de erro em vez do JSON; carregar a raiz do site primeiro resolve."""
+    sess = requests.Session()
+    sess.headers.update(HEADERS)
+    try:
+        sess.get(SITE, timeout=30)
+    except Exception as e:  # noqa: BLE001
+        print(f"[fetch_b3] aviso: nao consegui aquecer a sessao ({e})", file=sys.stderr)
+    return sess
+
+
+def _pede_token(sess, date: dt.date) -> str:
+    r = sess.get(f"{BASE}/requestname",
+                 params={"fileName": "TradeInformationConsolidatedFile",
+                         "date": date.isoformat()},
+                 headers=HEADERS, timeout=60)
+    r.raise_for_status()
+    ctype = r.headers.get("Content-Type", "")
+    if "json" not in ctype.lower():
+        # HTML/texto aqui = bloqueio, limite de taxa ou manutencao. NAO e ausencia
+        # de pregao: tratar como tal era a origem dos buracos silenciosos.
+        raise FalhaFonte(f"resposta nao-JSON em requestname (Content-Type={ctype!r})")
+    try:
+        payload = r.json()
+    except ValueError as e:
+        raise FalhaFonte(f"JSON invalido em requestname: {e}") from e
+    url = payload.get("redirectUrl") or ""
+    if "token=" not in url:
+        raise ArquivoIndisponivel(f"sem redirectUrl para {date}")
+    return url.split("token=")[-1]
+
+
 def fetch_day(date: dt.date, session=None, retries=3):
-    """Baixa e parseia o TIC file. Retorna (futuros_df, opcoes_df) ou (None, None)."""
-    sess = session or requests.Session()
+    """Baixa e parseia o TIC file.
+
+    Retorna (futuros_df, opcoes_df). Levanta ArquivoIndisponivel quando a B3 nao
+    tem arquivo para a data e FalhaFonte quando a resposta e inesperada -- a
+    distincao importa: a 1a e definitiva, a 2a deve ser retentada.
+    """
+    sess = session or nova_sessao()
     last_err = None
+    conteudo = b""
     for attempt in range(retries):
         try:
-            r = sess.get(f"{BASE}/requestname",
-                         params={"fileName": "TradeInformationConsolidatedFile",
-                                 "date": date.isoformat()},
-                         headers=HEADERS, timeout=60)
-            r.raise_for_status()
-            token = r.json().get("redirectUrl", "").split("token=")[-1]
-            if not token:
-                return None, None
-            r2 = sess.get(BASE + "?token=" + token, headers=HEADERS, timeout=180)
+            token = _pede_token(sess, date)
+            r2 = sess.get(BASE, params={"token": token}, headers=HEADERS, timeout=180)
             r2.raise_for_status()
+            conteudo = r2.content or b""
+            if len(conteudo) < 100 or ASSINATURA not in conteudo[:2000]:
+                raise FalhaFonte(
+                    f"payload sem a assinatura do TIC ({len(conteudo)} bytes) - "
+                    "provavelmente pagina de erro/limite da B3"
+                )
             break
+        except ArquivoIndisponivel:
+            raise
         except Exception as e:  # noqa: BLE001
             last_err = e
-            time.sleep(3 * (attempt + 1))
+            if attempt < retries - 1:
+                time.sleep(3 * (attempt + 1))
     else:
-        raise RuntimeError(f"Falha ao baixar TIC de {date}: {last_err}")
+        raise FalhaFonte(f"falha ao baixar TIC de {date} apos {retries} tentativas: {last_err}")
 
-    if not r2.content or len(r2.content) < 100:
-        return None, None
-    df = pd.read_csv(io.BytesIO(r2.content), sep=";", skiprows=1, decimal=",",
+    df = pd.read_csv(io.BytesIO(conteudo), sep=";", skiprows=1, decimal=",",
                      encoding="latin1", dtype={"TckrSymb": str})
     df = df.rename(columns=lambda c: c.strip())
     if "TckrSymb" not in df.columns:
-        return None, None
+        raise FalhaFonte(f"CSV de {date} sem a coluna TckrSymb (colunas: {list(df.columns)[:6]})")
     df["TckrSymb"] = df["TckrSymb"].astype(str).str.strip()
 
     fut = df[df["TckrSymb"].str.match(FUT_RE, na=False)].copy()
@@ -130,36 +187,51 @@ def existing_dates() -> set:
 
 
 def update_range(start: dt.date, end: dt.date, pause=1.0, max_days=None):
+    """Busca o intervalo e devolve o numero de dias que FALHARAM (nao 'sem arquivo').
+
+    Retornar as falhas permite ao chamador avisar quando a coleta quebrou: antes,
+    um erro sistematico so aparecia como uma linha em stderr e o dashboard seguia
+    publicando o ultimo fechamento bom como se fosse o de hoje.
+    """
     have = existing_dates()
     todo = [start + dt.timedelta(days=i) for i in range((end - start).days + 1)]
     todo = [d for d in todo if d.weekday() < 5 and d.isoformat() not in have]
     if max_days:
         todo = todo[:max_days]
     print(f"[fetch_b3] {len(todo)} dia(s) a buscar")
-    sess = requests.Session()
-    buf, obuf, fetched, empty = {}, [], 0, 0
+    sess = nova_sessao()
+    buf, obuf, fetched, sem_arquivo = {}, [], 0, 0
+    falhas = []
     for i, day in enumerate(todo):
+        fut = opc = None
         try:
             fut, opc = fetch_day(day, session=sess)
-        except Exception as e:  # noqa: BLE001
-            print(f"[fetch_b3] ERRO {day}: {e}", file=sys.stderr)
-            continue
+        except ArquivoIndisponivel:
+            sem_arquivo += 1
+        except FalhaFonte as e:
+            falhas.append((day, str(e)))
+            print(f"[fetch_b3] FALHA {day}: {e}", file=sys.stderr)
         if fut is not None and len(fut):
             buf.setdefault(day.year, []).append(fut)
-            if len(opc):
+            if opc is not None and len(opc):
                 obuf.append(opc)
             fetched += 1
-        else:
-            empty += 1
         if (i + 1) % 20 == 0 or i == len(todo) - 1:
             for yr, frames in buf.items():
                 save_year(yr, pd.concat([load_year(yr)] + frames, ignore_index=True))
             if obuf:
                 save_opcoes(obuf)
             buf, obuf = {}, []
-            print(f"[fetch_b3] progresso {i + 1}/{len(todo)} (ok={fetched} vazios={empty})")
+            print(f"[fetch_b3] progresso {i + 1}/{len(todo)} "
+                  f"(ok={fetched} sem_arquivo={sem_arquivo} falhas={len(falhas)})")
         time.sleep(pause)
-    print(f"[fetch_b3] concluido: {fetched} pregoes salvos, {empty} sem arquivo")
+    print(f"[fetch_b3] concluido: {fetched} pregoes salvos, "
+          f"{sem_arquivo} sem arquivo, {len(falhas)} falha(s)")
+    if falhas:
+        print(f"[fetch_b3] ATENCAO: {len(falhas)} dia(s) falharam e serao retentados "
+              f"na proxima execucao: {', '.join(str(d) for d, _ in falhas[:10])}",
+              file=sys.stderr)
+    return len(falhas)
 
 
 if __name__ == "__main__":
