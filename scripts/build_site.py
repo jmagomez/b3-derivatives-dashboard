@@ -12,6 +12,7 @@ AJUSTES_DIR = os.path.join(ROOT, "data", "ajustes")
 BCB_DIR = os.path.join(ROOT, "data", "bcb")
 OPCOES = os.path.join(ROOT, "data", "opcoes.csv")
 EIA_CSV = os.path.join(ROOT, "data", "eia.csv")
+MARKETS_CSV = os.path.join(ROOT, "data", "markets.csv")
 OUT = os.path.join(ROOT, "docs", "data")
 
 MONTH = {"F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
@@ -35,13 +36,31 @@ UNITS = {
     "DOL": "R$/US$ mil",
     "IND": "pontos",
     "DDI": "PU",
-    "FRC": "PU",
+    # FRC e cotado em TAXA (% a.a.), nao em PU: o arquivo da B3 traz AdjstdQt
+    # vazio e o valor em AdjstdQtTax. Antes o rotulo dizia "PU" e a serie saia
+    # vazia porque front_month_series() exigia ajuste_atual.
+    "FRC": "% a.a.",
     "BGI": "R$/@",
     "CCM": "R$/saca",
     "ICF": "US$/saca",
     "SJC": "US$/saca",
     "BRENT": "US$/barril",
     "WTI": "US$/barril",
+    "SP500": "pontos",
+    "NASDAQ": "pontos",
+    "BTC": "US$",
+    "IBOV": "pontos",
+}
+
+# Contratos cotados em taxa (% a.a.) em vez de preco de ajuste (PU).
+COTADOS_EM_TAXA = {"FRC"}
+
+# Coluna de markets.csv -> (codigo do card, rotulo)
+MARKETS = {
+    "sp500": ("SP500", "S&P 500"),
+    "nasdaq": ("NASDAQ", "Nasdaq Composite"),
+    "btc": ("BTC", "Bitcoin"),
+    "ibov": ("IBOV", "Ibovespa a vista"),
 }
 
 
@@ -63,16 +82,21 @@ def load_ajustes() -> pd.DataFrame:
 
 
 def front_month_series(df: pd.DataFrame, code: str) -> list:
+    """Serie do 1o vencimento. Usa `taxa` para contratos cotados em taxa (FRC)
+    e `ajuste_atual` (PU) para os demais."""
     sub = df[df["codigo"] == code].copy()
     if sub.empty:
         return []
+    col = "taxa" if code in COTADOS_EM_TAXA else "ajuste_atual"
     sub = sub[sub["mat"] >= sub["date_d"].map(lambda d: dt.date(d.year, d.month, 1))]
+    sub = sub.dropna(subset=[col])
+    if sub.empty:
+        return []
     sub = sub.sort_values(["date", "mat"])
     first = sub.groupby("date").first().reset_index()
     return [
-        {"date": r["date"], "value": r["ajuste_atual"], "venc": r["vencimento"]}
+        {"date": r["date"], "value": round(float(r[col]), 4), "venc": r["vencimento"]}
         for _, r in first.iterrows()
-        if pd.notna(r["ajuste_atual"])
     ]
 
 
@@ -103,7 +127,7 @@ def di_curve(df: pd.DataFrame, ref_date: str) -> list:
 
 
 def di_front_rate_series(df: pd.DataFrame) -> list:
-    """Taxa implicita do DI com ~1 ano de prazo (contrato jan mais proximo de 252 du)."""
+    """Taxa do DI com prazo mais proximo de 252 dias uteis (~1 ano)."""
     sub = df[df["codigo"] == "DI1"].copy()
     out = []
     for date, g in sub.groupby("date"):
@@ -153,6 +177,34 @@ def eia_payload() -> dict:
     return out
 
 
+def markets_payload() -> dict:
+    """Indices globais, bitcoin e Ibovespa a vista (Yahoo via fetch_markets.py)."""
+    if not os.path.exists(MARKETS_CSV):
+        return {}
+    df = pd.read_csv(MARKETS_CSV, parse_dates=["date"]).sort_values("date")
+    out = {}
+    for col in MARKETS:
+        if col in df.columns:
+            pts = series_points(df, col)
+            if pts:
+                out[col] = pts
+    return out
+
+
+def card(code: str, label: str, unit: str, serie: list):
+    """Card de resumo a partir de uma serie [{date, value}, ...]."""
+    if not serie:
+        return None
+    cur = serie[-1]
+    prev = serie[-2] if len(serie) >= 2 else None
+    var = None
+    if prev and prev["value"]:
+        var = round((cur["value"] / prev["value"] - 1) * 100, 2)
+    return {"code": code, "label": label, "unit": unit, "date": cur["date"],
+            "value": cur["value"], "prev": prev["value"] if prev else None,
+            "var_pct": var, "venc": None}
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     df = load_ajustes()
@@ -172,7 +224,7 @@ def main():
             if len(serie) >= 2:
                 cur, prev = serie[-1], serie[-2]
                 var = None
-                if code == "DI1":
+                if code == "DI1" or code in COTADOS_EM_TAXA:
                     var = round(cur["value"] - prev["value"], 3)  # p.p.
                 elif prev["value"]:
                     var = round((cur["value"] / prev["value"] - 1) * 100, 2)
@@ -194,7 +246,9 @@ def main():
         json.dump(payload_series, f)
 
     bcb = {}
-    for path in glob.glob(os.path.join(BCB_DIR, "*.csv")):
+    # sorted(): sem isso a ordem das chaves variava com o filesystem e o
+    # bcb.json aparecia como modificado em toda execucao.
+    for path in sorted(glob.glob(os.path.join(BCB_DIR, "*.csv"))):
         name = os.path.splitext(os.path.basename(path))[0]
         d = pd.read_csv(path)
         bcb[name] = d.to_dict(orient="records")
@@ -210,28 +264,44 @@ def main():
     eia = eia_payload()
     with open(os.path.join(OUT, "eia.json"), "w") as f:
         json.dump(eia, f)
-    if eia.get("brent"):
-        cur_b = eia["brent"][-1]
-        summary["items"].append({
-            "code": "BRENT", "label": "Brent Dated (EIA)", "unit": UNITS["BRENT"], "date": cur_b["date"],
-            "value": cur_b["value"],
-            "prev": eia["brent"][-2]["value"] if len(eia["brent"]) >= 2 else None,
-            "var_pct": round((cur_b["value"] / eia["brent"][-2]["value"] - 1) * 100, 2) if len(eia["brent"]) >= 2 and eia["brent"][-2]["value"] else None,
-            "venc": None,
-        })
-    if eia.get("wti"):
-        cur_w = eia["wti"][-1]
-        summary["items"].append({
-            "code": "WTI", "label": "WTI Spot (EIA)", "unit": UNITS["WTI"], "date": cur_w["date"],
-            "value": cur_w["value"],
-            "prev": eia["wti"][-2]["value"] if len(eia["wti"]) >= 2 else None,
-            "var_pct": round((cur_w["value"] / eia["wti"][-2]["value"] - 1) * 100, 2) if len(eia["wti"]) >= 2 and eia["wti"][-2]["value"] else None,
-            "venc": None,
-        })
+    for key, code, label in (("brent", "BRENT", "Brent Dated (EIA)"),
+                             ("wti", "WTI", "WTI Spot (EIA)")):
+        it = card(code, label, UNITS[code], eia.get(key, []))
+        if it:
+            summary["items"].append(it)
+
+    markets = markets_payload()
+    with open(os.path.join(OUT, "markets.json"), "w") as f:
+        json.dump(markets, f, ensure_ascii=False)
+    for col, (code, label) in MARKETS.items():
+        it = card(code, label, UNITS[code], markets.get(col, []))
+        if it:
+            summary["items"].append(it)
+
+    # Defasagem do dado mais recente de cada fonte. Sem isso uma quebra na coleta
+    # passa batida: o dashboard e o e-mail seguem exibindo o ultimo numero bom
+    # como se fosse o fechamento de hoje.
+    hoje = dt.date.today()
+    frescor = {}
+    fontes = [
+        ("b3", summary.get("last_date")),
+        ("eia", eia["brent"][-1]["date"] if eia.get("brent") else None),
+        ("markets", markets["sp500"][-1]["date"] if markets.get("sp500") else None),
+        ("bcb", max((r["date"] for r in bcb.get("selic", [])), default=None)),
+    ]
+    for nome, ultima in fontes:
+        if ultima:
+            frescor[nome] = {
+                "last_date": str(ultima)[:10],
+                "dias": (hoje - dt.date.fromisoformat(str(ultima)[:10])).days,
+            }
+    summary["frescor"] = frescor
+    summary["generated_at_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
     with open(os.path.join(OUT, "summary.json"), "w") as f:
         json.dump(summary, f, ensure_ascii=False)
-    print(f"[build_site] JSONs gerados em {OUT}")
+    atraso = ", ".join(f"{k}={v['dias']}d" for k, v in sorted(frescor.items()))
+    print(f"[build_site] JSONs gerados em {OUT} | defasagem: {atraso}")
 
 
 if __name__ == "__main__":
