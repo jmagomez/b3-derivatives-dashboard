@@ -22,11 +22,19 @@ responde HTTP 200 com corpo vazio para qualquer intervalo, inclusive 2020.
 Barra da sessao em curso
 ------------------------
 O Yahoo devolve a barra do dia corrente ainda em formacao (valor intradiario).
-Grava-la misturaria intradia com fechamento no mesmo grafico. Regra adotada: so
-entram barras com data ESTRITAMENTE ANTERIOR a data UTC de hoje. Na execucao
-diaria (02:00 UTC) isso preserva o fechamento do dia anterior tanto para os
-indices (sessao de NY encerra 20:00/21:00 UTC) quanto para o bitcoin (barra
-diaria fecha 00:00 UTC).
+Grava-la misturaria intradia com fechamento no mesmo grafico.
+
+O corte NAO pode ser um simples "data < hoje (UTC)", porque cada ativo fecha num
+horario diferente e a rotina diaria roda as 23:00 UTC (20h BRT):
+
+    ^GSPC / ^IXIC   NY fecha 16:00 ET = 20:00 UTC (verao) ou 21:00 UTC (inverno)
+    ^BVSP           B3 fecha 18:00 BRT = 21:00 UTC (BRT e UTC-3 fixo desde 2019)
+    BTC-USD         negocia 24/7: a barra diaria so fecha a 00:00 UTC do dia SEGUINTE
+
+As 23:00 UTC os indices do dia ja fecharam, mas a barra do bitcoin ainda tem uma
+hora pela frente. Com a regra ingenua, o fechamento do dia dos indices seria
+descartado a toa e as series ficariam um dia atrasadas. Por isso o corte e por
+ativo (FECHAMENTO_MIN_UTC).
 """
 import datetime as dt
 import os
@@ -42,22 +50,46 @@ SERIES = {
     "^BVSP": "ibov",
 }
 
+# Minutos apos 00:00 UTC do dia D a partir dos quais a barra de D e considerada
+# FECHADA. 1440 = so no dia seguinte. Margem de 30 min sobre o fechamento real
+# para o Yahoo consolidar o preco oficial.
+FECHAMENTO_MIN_UTC = {
+    "^GSPC": 21 * 60 + 30,
+    "^IXIC": 21 * 60 + 30,
+    "^BVSP": 21 * 60 + 30,
+    "BTC-USD": 24 * 60,
+}
+PADRAO_FECHAMENTO_MIN = 24 * 60
+
 INICIO = dt.date(2020, 1, 1)
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "markets.csv")
 COLS = ["date"] + list(SERIES.values())
 
 
+def _agora_utc() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
 def _hoje_utc() -> dt.date:
-    return dt.datetime.now(dt.timezone.utc).date()
+    return _agora_utc().date()
 
 
-def normaliza(bruto: dict, hoje=None) -> pd.DataFrame:
+def barra_fechada(ticker: str, data: dt.date, agora: dt.datetime) -> bool:
+    """A barra diaria de `data` para `ticker` ja e um fechamento consolidado?"""
+    minutos = FECHAMENTO_MIN_UTC.get(ticker, PADRAO_FECHAMENTO_MIN)
+    corte = dt.datetime.combine(data, dt.time(0, 0), tzinfo=dt.timezone.utc) + dt.timedelta(minutes=minutos)
+    return agora >= corte
+
+
+def normaliza(bruto: dict, agora=None) -> pd.DataFrame:
     """Converte {ticker: serie de fechamentos} num DataFrame date x serie.
 
     Funcao pura (sem rede): recebe o que a camada de rede devolveu e aplica o
-    corte da sessao em curso. Testada em tests/test_markets.py.
+    corte da sessao em curso, por ativo. Testada em tests/test_markets.py.
     """
-    hoje = hoje or _hoje_utc()
+    agora = agora or _agora_utc()
+    if agora.tzinfo is None:
+        agora = agora.replace(tzinfo=dt.timezone.utc)
     quadros = []
     for ticker, coluna in SERIES.items():
         s = bruto.get(ticker)
@@ -68,8 +100,8 @@ def normaliza(bruto: dict, hoje=None) -> pd.DataFrame:
             coluna: pd.to_numeric(pd.Series(list(s.values)), errors="coerce"),
         })
         df = df.dropna(subset=[coluna])
-        # descarta a barra da sessao em curso (ver docstring do modulo)
-        df = df[df["date"] < hoje]
+        # descarta a barra ainda em formacao (ver docstring do modulo)
+        df = df[df["date"].map(lambda d: barra_fechada(ticker, d, agora))]
         df = df.drop_duplicates(subset=["date"], keep="last")
         if len(df):
             quadros.append(df)
@@ -131,7 +163,7 @@ def update(start=INICIO, end=None):
         print("[fetch_markets] nenhum dado retornado; CSV mantido.", file=sys.stderr)
         return
 
-    novo = normaliza(bruto, hoje=_hoje_utc())
+    novo = normaliza(bruto, agora=_agora_utc())
     if novo.empty:
         print("[fetch_markets] nada novo apos o corte da sessao em curso.")
         return
