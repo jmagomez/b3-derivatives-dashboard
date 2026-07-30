@@ -1,8 +1,11 @@
-name: Atualizacao diaria + e-mail (20h BRT)
+name: Atualizacao diaria + e-mail (21h BRT)
 
 on:
   schedule:
-    - cron: "0 23 * * *"  # 23:00 UTC = 20:00 BRT (mesmo dia)
+    # 00:00 UTC = 21:00 BRT do dia anterior. E o primeiro instante em que TODAS
+    # as fontes do pregao anterior estao fechadas: NY e B3 ja encerraram e a
+    # barra diaria do bitcoin acabou de fechar (00:00 UTC).
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 concurrency:
