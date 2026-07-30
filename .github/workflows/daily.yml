@@ -1,8 +1,8 @@
-name: Atualizacao diaria + e-mail (23h BRT)
+name: Atualizacao diaria + e-mail (20h BRT)
 
 on:
   schedule:
-    - cron: "0 2 * * *"   # 02:00 UTC = 23:00 BRT (dia anterior)
+    - cron: "0 23 * * *"  # 23:00 UTC = 20:00 BRT (mesmo dia)
   workflow_dispatch:
 
 concurrency:
@@ -39,6 +39,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data docs
           git diff --cached --quiet || git commit -m "Atualizacao diaria $(date -u +%F)"
+          # Caso o backfill (ou um push manual) tenha mexido na main durante o job.
+          git pull --rebase --autostash
           git push
 
       - name: Enviar e-mail
