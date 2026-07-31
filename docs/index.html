@@ -157,7 +157,10 @@ function lineChart(ctx, datasets, opts={}) {
         tooltip:{
           backgroundColor:'#1c2438',borderColor:'#2a3550',borderWidth:1,cornerRadius:8,padding:10,
           titleColor:'#e8ecf4',bodyColor:'#c3cbdb',
-          callbacks:{label:(c)=>`${c.dataset.label}: ${nf.format(c.parsed.y)}${unit?' '+unit:''}`}
+          callbacks:{label:(c)=>{
+            const ehVol = c.dataset.yAxisID==='yVol';
+            return `${c.dataset.label}: ${nf.format(c.parsed.y)}${ehVol?' contratos':(unit?' '+unit:'')}`;
+          }}
         },
         zoom: opts.isCurve ? undefined : {
           pan:{enabled:true,mode:'x'},
@@ -192,6 +195,26 @@ function ds(label,serie,color,yKey='value',fill=false){
     pointHoverRadius:5,
     pointHitRadius:8,
   };
+}
+
+// Barras de contratos negociados, para ler preco e liquidez no mesmo grafico.
+// Vao num eixo Y proprio (direita, oculto) para nao competir com o preco.
+function dsVolume(serie,color='rgba(139,150,171,.35)'){
+  const pts = serie.filter(p=>p.contratos!=null);
+  if(pts.length < serie.length*0.5) return null;   // cobertura baixa: nao plota
+  return {
+    type:'bar', label:'Contratos negociados', yAxisID:'yVol',
+    data: pts.map(p=>({x:p.date, y:p.contratos})),
+    backgroundColor:color, borderColor:color, borderWidth:0,
+    barPercentage:1, categoryPercentage:1, order:99,
+  };
+}
+
+// Eixo do volume: max = 4x o pico, para as barras ocuparem so a faixa de baixo
+// do grafico em vez de dominar a area sob a linha de preco.
+function escalaVolume(serie){
+  const max = Math.max(...serie.filter(p=>p.contratos!=null).map(p=>p.contratos));
+  return {yVol:{position:'right', max:max*4, beginAtZero:true, display:false, grid:{drawOnChartArea:false}}};
 }
 
 function box(panel, title, {badge=''}={}){
@@ -305,6 +328,23 @@ async function main(){
   });
 
   const S = code => series?.[code]?.serie || [];
+
+  // Grafico padrao de futuro: linha de preco/taxa + barras de contratos.
+  function futuro(panel, code, titulo, cor, unidade){
+    const serie = S(code);
+    if(!serie.length) return;
+    const vol = dsVolume(serie);
+    const dsets = [ds(code, serie, cor, undefined, !vol)];
+    if(vol) dsets.push(vol);
+    lineChart(box(panel, titulo, {badge:lastVal(serie)}), dsets, {
+      unit: unidade ?? U(code),
+      extra: vol ? {scales:{
+        x:{type:'time',time:{tooltipFormat:'dd/MM/yyyy'},ticks:{maxTicksLimit:8},grid:{color:'rgba(139,150,171,.07)'}},
+        y:{ticks:{callback:v=>nf.format(v)},grid:{color:'rgba(139,150,171,.07)'}},
+        ...escalaVolume(serie)
+      }} : undefined,
+    });
+  }
   const U = code => series?.[code]?.unit || '';
 
   // Juros
@@ -314,14 +354,14 @@ async function main(){
     if(curve.curve_old?.length) dsets.push(ds('1 ano atrás',curve.curve_old.map(p=>({date:p.mat,value:p.rate})),'#8b96ab'));
     lineChart(c,dsets,{isCurve:true,unit:'% a.a.'});
   }
-  if(S('DI1').length) lineChart(box(panelEls.juros,'DI ~1 ano — taxa implícita (% a.a.)',{badge:lastVal(S('DI1'),'%')}),[ds('DI ~1a',S('DI1'),'#4f8ef7',undefined,true)],{unit:'% a.a.'});
+  futuro(panelEls.juros,'DI1','DI ~1 ano — taxa implícita (% a.a.) e contratos negociados','#4f8ef7','% a.a.');
 
   // Câmbio
-  if(S('DOL').length) lineChart(box(panelEls.cambio,'Dólar futuro (1º vencimento) — R$/US$ mil',{badge:lastVal(S('DOL'))}),[ds('DOL',S('DOL'),'#f7b84f',undefined,true)],{unit:U('DOL')});
+  futuro(panelEls.cambio,'DOL','Dólar futuro (1º vencimento) — R$/US$ mil e contratos','#f7b84f');
   if(bcb?.ptax_venda?.length) lineChart(box(panelEls.cambio,'PTAX venda — R$/US$',{badge:lastVal(bcb.ptax_venda)}),[ds('PTAX',bcb.ptax_venda,'#2ecc71',undefined,true)],{unit:'R$/US$'});
 
   // Ibovespa
-  if(S('IND').length) lineChart(box(panelEls.ibov,'Ibovespa futuro (1º vencimento) — pontos',{badge:lastVal(S('IND'))}),[ds('IND',S('IND'),'#4f8ef7',undefined,true)],{unit:U('IND')});
+  futuro(panelEls.ibov,'IND','Ibovespa futuro (1º vencimento) — pontos e contratos','#4f8ef7');
   if(markets?.ibov?.length){
     lineChart(box(panelEls.ibov,'Ibovespa à vista — fechamento (Yahoo, ^BVSP)',{badge:lastVal(markets.ibov)}),[ds('IBOV',markets.ibov,'#2ecc71',undefined,true)],{unit:'pontos'});
     const n=document.createElement('p');n.className='panel-note';
@@ -331,11 +371,11 @@ async function main(){
 
   // Commodities
   [['BGI','Boi gordo (R$/@)','#e67e22'],['CCM','Milho (R$/saca)','#f1c40f'],['ICF','Café arábica (US$/saca)','#8e5a3b'],['SJC','Soja (US$/saca)','#2ecc71']]
-    .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.commod,t+' — 1º vencimento',{badge:lastVal(S(code))}),[ds(code,S(code),color,undefined,true)],{unit:U(code)}); });
+    .forEach(([code,t,color])=>{ futuro(panelEls.commod,code,t+' — 1º vencimento e contratos',color); });
 
   // Cupom
   [['DDI','Cupom cambial DDI (PU)','#4f8ef7'],['FRC','FRA de cupom FRC (% a.a.)','#9b59b6']]
-    .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.cupom,t+' — 1º vencimento',{badge:lastVal(S(code))}),[ds(code,S(code),color,undefined,true)],{unit:U(code)}); });
+    .forEach(([code,t,color])=>{ futuro(panelEls.cupom,code,t+' — 1º vencimento e contratos',color); });
 
   // Petroleo (Brent Dated / WTI Spot + crack spreads)
   if(eia?.brent?.length || eia?.wti?.length){
