@@ -12,8 +12,12 @@ SERIES = {
     "selic": 11,      # Selic diaria (% a.d.)
     "ptax_venda": 1,  # Dolar PTAX venda
     "ipca": 433,      # IPCA mensal (% a.m.)
-    "ibov": 7,        # Ibovespa - fechamento diario (pontos)
 }
+# A serie 7 (Ibovespa a vista) FOI REMOVIDA: o SGS responde HTTP 200 com corpo
+# vazio para qualquer intervalo, inclusive 2020 -- ela nunca gerou
+# data/bcb/ibov.csv. O erro era silenciado pelo `except` de update() e o grafico
+# "Ibovespa a vista" do dashboard nunca renderizou. A fonte agora e ^BVSP
+# (scripts/fetch_markets.py).
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "bcb")
 URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados"
 

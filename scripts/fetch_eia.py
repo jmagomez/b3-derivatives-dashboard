@@ -81,7 +81,9 @@ def update(start=dt.date(2020, 1, 1), end=None):
         old = pd.read_csv(CSV_PATH, parse_dates=["date"])
         if len(old):
             last = old["date"].max().date()
-            fetch_start = min(start, last - dt.timedelta(days=10))  # sobreposicao p/ revisoes
+            # max, nao min: com min o inicio voltava a 2020-01-01 em toda execucao
+            # diaria e rebaixava ~6 anos de historico sem necessidade.
+            fetch_start = max(start, last - dt.timedelta(days=10))  # sobreposicao p/ revisoes
 
     try:
         rows = fetch_range(fetch_start, end)

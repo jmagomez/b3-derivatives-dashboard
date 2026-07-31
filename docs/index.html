@@ -86,6 +86,11 @@
   .panel-note{color:var(--muted-dim);font-size:12px;line-height:1.5;margin:0}
   .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;background:var(--card);border-radius:10px;border:1px dashed var(--border)}
 
+  .stale{
+    margin:10px 0 0;padding:8px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;
+    background:rgba(231,76,60,.10);border:1px solid rgba(231,76,60,.35);color:#f0a89f;max-width:900px;
+  }
+  .stale b{color:#ffd4cd}
   footer{color:var(--muted-dim);font-size:11.5px;line-height:1.6;padding:4px 24px 28px;max-width:1100px}
   a{color:var(--acc)}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
@@ -95,6 +100,7 @@
 <header>
   <h1>Derivativos B3 — Dashboard Diário</h1>
   <div class="sub"><span class="dot" id="statusDot"></span><span id="sub">Carregando…</span></div>
+  <div id="staleWarn" class="stale" hidden></div>
 </header>
 <div class="cards" id="cards"></div>
 <div class="topbar">
@@ -111,12 +117,13 @@
 </div>
 <div id="panels"></div>
 <footer>
-  Fontes: B3 (arquivo público Up2Data — negócios consolidados), Banco Central (SGS) e EIA (U.S. Energy Information Administration — Brent Dated, WTI Spot e produtos). Contratos B3: ~12 meses retroativos (limite da B3); indicadores BCB e EIA desde 01/01/2020.
-  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Não há fonte gratuita para a curva de futuros ICE Brent/CME WTI (dados de settlement por vencimento são pagos) — por isso a aba Petróleo mostra apenas preços à vista. Os crack spreads usam benchmarks americanos (NY Harbor / US Gulf Coast, EIA) contra o Brent, por falta de fonte europeia gratuita equivalente. Cada indicador mostra sua própria data de referência, pois as fontes (B3, BCB, EIA) publicam com atrasos diferentes. Uso informativo — não é recomendação de investimento.
+  Fontes: B3 (arquivo público Up2Data — negócios consolidados), Banco Central (SGS), EIA (U.S. Energy Information Administration — Brent Dated, WTI Spot e produtos) e Yahoo Finance (S&P 500, Nasdaq Composite, Bitcoin e Ibovespa à vista). Contratos B3: ~12 meses retroativos (limite da B3); indicadores BCB, EIA e Yahoo desde 01/01/2020.
+  Taxas do DI são implícitas do PU com contagem de dias úteis aproximada (seg–sex). Não há fonte gratuita para a curva de futuros ICE Brent/CME WTI (dados de settlement por vencimento são pagos) — por isso a aba Petróleo mostra apenas preços à vista. Os crack spreads usam benchmarks americanos (NY Harbor / US Gulf Coast, EIA) contra o Brent, por falta de fonte europeia gratuita equivalente. Cada indicador mostra sua própria data de referência, pois as fontes (B3, BCB, EIA, Yahoo) publicam com atrasos diferentes. Uso informativo — não é recomendação de investimento.
 </footer>
 <script>
 const TABS = [
   ["juros","Juros (DI)"],["cambio","Câmbio"],["ibov","Ibovespa"],
+  ["global","Global (BTC, S&P, Nasdaq)"],
   ["commod","Commodities"],["cupom","Cupom cambial"],["petroleo","Petróleo"],
   ["opcoes","Opções"],["macro","Indicadores BCB"]
 ];
@@ -240,8 +247,9 @@ function applyRange(days){
 }
 
 async function main(){
-  const [series,curve,bcb,opcoes,summary,eia] = await Promise.all(
-    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json','eia.json'].map(f=>fetch('data/'+f).then(r=>r.ok?r.json():null).catch(()=>null)));
+  const [series,curve,bcb,opcoes,summary,eia,markets] = await Promise.all(
+    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json','eia.json','markets.json']
+      .map(f=>fetch('data/'+f).then(r=>r.ok?r.json():null).catch(()=>null)));
 
   summaryLastDate = summary?.last_date || null;
   document.getElementById('sub').textContent = summary?.last_date ?
@@ -249,10 +257,23 @@ async function main(){
   document.getElementById('statusDot').style.background = summary?.last_date ? 'var(--up)' : 'var(--muted-dim)';
   document.getElementById('statusDot').style.boxShadow = summary?.last_date ? '0 0 8px var(--up)' : 'none';
 
+  // Aviso de defasagem: uma quebra silenciosa na coleta nao pode passar batida.
+  const FONTES = {b3:'contratos da B3', bcb:'indicadores do BCB', eia:'petróleo (EIA)', markets:'índices globais/BTC'};
+  const LIMITE = {b3:4, bcb:5, eia:12, markets:4};  // dias corridos tolerados
+  const atrasadas = Object.entries(summary?.frescor||{})
+    .filter(([k,v])=>v.dias > (LIMITE[k]??7))
+    .map(([k,v])=>`<b>${FONTES[k]||k}</b> parado em ${fmtDate(v.last_date)} (${v.dias} dias)`);
+  if(atrasadas.length){
+    const w=document.getElementById('staleWarn');
+    w.hidden=false;
+    w.innerHTML='⚠ Dados possivelmente defasados: '+atrasadas.join(' · ')+
+      '. Os números abaixo são o último fechamento disponível de cada fonte, não o de hoje.';
+  }
+
   // cards
   const cards=document.getElementById('cards');
   (summary?.items||[]).forEach(it=>{
-    const isDI = it.code==='DI1';
+    const isDI = it.code==='DI1' || it.code==='FRC';
     const v = it.var_pct;
     const vTxt = v==null?'—':(v>=0?'▲ +':'▼ ')+nf.format(Math.abs(v))+(isDI?' p.p.':'%');
     const trend = v==null?'':(v>=0?'up':'dn');
@@ -301,14 +322,19 @@ async function main(){
 
   // Ibovespa
   if(S('IND').length) lineChart(box(panelEls.ibov,'Ibovespa futuro (1º vencimento) — pontos',{badge:lastVal(S('IND'))}),[ds('IND',S('IND'),'#4f8ef7',undefined,true)],{unit:U('IND')});
-  if(bcb?.ibov?.length) lineChart(box(panelEls.ibov,'Ibovespa à vista — fechamento (desde 2020, BCB)',{badge:lastVal(bcb.ibov)}),[ds('IBOV',bcb.ibov,'#2ecc71',undefined,true)],{unit:'pontos'});
+  if(markets?.ibov?.length){
+    lineChart(box(panelEls.ibov,'Ibovespa à vista — fechamento (Yahoo, ^BVSP)',{badge:lastVal(markets.ibov)}),[ds('IBOV',markets.ibov,'#2ecc71',undefined,true)],{unit:'pontos'});
+    const n=document.createElement('p');n.className='panel-note';
+    n.textContent='O Ibovespa à vista vinha da série 7 do SGS/BCB, que foi descontinuada (responde vazio para qualquer período) — a fonte agora é ^BVSP no Yahoo Finance. A diferença entre o futuro e o à vista é a base, e reflete o custo de carrego até o vencimento.';
+    panelEls.ibov.appendChild(n);
+  }
 
   // Commodities
   [['BGI','Boi gordo (R$/@)','#e67e22'],['CCM','Milho (R$/saca)','#f1c40f'],['ICF','Café arábica (US$/saca)','#8e5a3b'],['SJC','Soja (US$/saca)','#2ecc71']]
     .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.commod,t+' — 1º vencimento',{badge:lastVal(S(code))}),[ds(code,S(code),color,undefined,true)],{unit:U(code)}); });
 
   // Cupom
-  [['DDI','Cupom cambial DDI (PU)','#4f8ef7'],['FRC','FRA de cupom FRC (PU)','#9b59b6']]
+  [['DDI','Cupom cambial DDI (PU)','#4f8ef7'],['FRC','FRA de cupom FRC (% a.a.)','#9b59b6']]
     .forEach(([code,t,color])=>{ if(S(code).length) lineChart(box(panelEls.cupom,t+' — 1º vencimento',{badge:lastVal(S(code))}),[ds(code,S(code),color,undefined,true)],{unit:U(code)}); });
 
   // Petroleo (Brent Dated / WTI Spot + crack spreads)
@@ -330,6 +356,52 @@ async function main(){
   }
   if(!eia?.brent?.length && !eia?.wti?.length){
     panelEls.petroleo.innerHTML='<div class="empty">Sem dados de petróleo ainda (configure o secret EIA_API_KEY).</div>';
+  }
+
+  // Global — BTC, S&P 500, Nasdaq Composite
+  if(markets?.btc?.length || markets?.sp500?.length || markets?.nasdaq?.length){
+    if(markets.btc?.length)
+      lineChart(box(panelEls.global,'Bitcoin — US$ (fechamento diário UTC)',{badge:lastVal(markets.btc,'US$')}),
+        [ds('BTC/USD',markets.btc,'#f7931a',undefined,true)],{unit:'US$'});
+
+    // S&P e Nasdaq têm escalas muito diferentes (~7,4 mil vs ~24,9 mil pontos):
+    // dois eixos Y, senão a curva do S&P vira uma linha achatada no rodapé.
+    if(markets.sp500?.length && markets.nasdaq?.length){
+      const c=box(panelEls.global,'S&P 500 e Nasdaq Composite — pontos',{badge:lastVal(markets.sp500)});
+      const d1=ds('S&P 500',markets.sp500,'#4f8ef7');           d1.yAxisID='y';
+      const d2=ds('Nasdaq Composite',markets.nasdaq,'#7c5cff'); d2.yAxisID='y2';
+      lineChart(c,[d1,d2],{unit:'pontos',extra:{scales:{
+        x:{type:'time',time:{tooltipFormat:'dd/MM/yyyy'},ticks:{maxTicksLimit:8},grid:{color:'rgba(139,150,171,.07)'}},
+        y:{position:'left',ticks:{callback:v=>nf.format(v)},grid:{color:'rgba(139,150,171,.07)'},title:{display:true,text:'S&P 500'}},
+        y2:{position:'right',ticks:{callback:v=>nf.format(v)},grid:{drawOnChartArea:false},title:{display:true,text:'Nasdaq'}}
+      }}});
+    } else {
+      if(markets.sp500?.length) lineChart(box(panelEls.global,'S&P 500 — pontos',{badge:lastVal(markets.sp500)}),[ds('S&P 500',markets.sp500,'#4f8ef7',undefined,true)],{unit:'pontos'});
+      if(markets.nasdaq?.length) lineChart(box(panelEls.global,'Nasdaq Composite — pontos',{badge:lastVal(markets.nasdaq)}),[ds('Nasdaq Composite',markets.nasdaq,'#7c5cff',undefined,true)],{unit:'pontos'});
+    }
+
+    // Evolução comparável: base 100 na primeira data em que TODAS as séries do
+    // recorte têm valor, senão o rebase mistura pontos de partida diferentes.
+    const comparaveis = [['BTC','btc','#f7931a'],['S&P 500','sp500','#4f8ef7'],['Nasdaq','nasdaq','#7c5cff'],['Ibovespa','ibov','#2ecc71']]
+      .filter(([,k])=>markets[k]?.length);
+    if(comparaveis.length>1){
+      const inicio = comparaveis.map(([,k])=>markets[k][0].date).sort().pop();
+      const rebase = comparaveis.map(([lbl,k,color])=>{
+        const pts = markets[k].filter(p=>p.date>=inicio);
+        const b = pts.length ? pts[0].value : null;
+        return [lbl,(b?pts.map(p=>({date:p.date,value:p.value/b*100})):[]),color];
+      }).filter(([,pts])=>pts.length);
+      if(rebase.length>1){
+        lineChart(box(panelEls.global,`Evolução comparada — base 100 em ${fmtDate(inicio)}`),
+          rebase.map(([lbl,pts,color])=>ds(lbl,pts,color)),{unit:'base 100'});
+      }
+    }
+
+    const note=document.createElement('p');note.className='panel-note';
+    note.textContent='Fonte: Yahoo Finance (^GSPC, ^IXIC, BTC-USD). Fechamentos consolidados — a barra da sessão em curso é descartada, então o dado mais recente é sempre o do último dia fechado, nunca um valor intradiário. Bitcoin negocia todos os dias; os índices, só em dias de pregão — por isso as séries têm contagens de pontos diferentes. Índices em pontos: não é retorno total, não incluem dividendos.';
+    panelEls.global.appendChild(note);
+  } else {
+    panelEls.global.innerHTML='<div class="empty">Sem dados de índices globais ainda — rode a atualização diária ou o backfill.</div>';
   }
 
   // Opções
