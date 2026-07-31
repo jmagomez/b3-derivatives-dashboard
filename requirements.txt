@@ -1,7 +1,7 @@
 pandas>=2.0
 numpy>=1.24
 requests>=2.31
-lxml>=4.9
+lxml>=6.1.1
 html5lib>=1.1
 # Indices globais / BTC / Ibovespa a vista (scripts/fetch_markets.py). O yfinance
 # cuida do handshake de cookie/crumb do Yahoo; faixa aberta no patch para receber
