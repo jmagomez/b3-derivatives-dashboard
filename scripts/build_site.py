@@ -94,10 +94,18 @@ def front_month_series(df: pd.DataFrame, code: str) -> list:
         return []
     sub = sub.sort_values(["date", "mat"])
     first = sub.groupby("date").first().reset_index()
-    return [
-        {"date": r["date"], "value": round(float(r[col]), 4), "venc": r["vencimento"]}
-        for _, r in first.iterrows()
-    ]
+    out = []
+    for _, r in first.iterrows():
+        ponto = {"date": r["date"], "value": round(float(r[col]), 4), "venc": r["vencimento"]}
+        # Liquidez do proprio vencimento em tela. Ja vinha sendo coletada em
+        # `contratos`/`volume` (98% dos dias) e nao aparecia em grafico nenhum
+        # de futuros -- preco sem volume esconde se a variacao teve lastro.
+        if pd.notna(r.get("contratos")):
+            ponto["contratos"] = int(r["contratos"])
+        if pd.notna(r.get("volume")):
+            ponto["volume"] = round(float(r["volume"]), 2)
+        out.append(ponto)
+    return out
 
 
 def di_rate(pu: float, ref: dt.date, mat: dt.date):
@@ -141,7 +149,12 @@ def di_front_rate_series(df: pd.DataFrame) -> list:
         r = g.sort_values("dist").iloc[0]
         rate = row_rate(r, ref)
         if rate is not None and 0 < rate < 60:
-            out.append({"date": date, "value": rate, "venc": r["vencimento"]})
+            ponto = {"date": date, "value": rate, "venc": r["vencimento"]}
+            if pd.notna(r.get("contratos")):
+                ponto["contratos"] = int(r["contratos"])
+            if pd.notna(r.get("volume")):
+                ponto["volume"] = round(float(r["volume"]), 2)
+            out.append(ponto)
     return sorted(out, key=lambda x: x["date"])
 
 
