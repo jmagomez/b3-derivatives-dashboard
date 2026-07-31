@@ -1,6 +1,6 @@
 # Dashboard de Derivativos B3
 
-Dashboard diário dos principais contratos de derivativos e indicadores do mercado brasileiro, atualizado automaticamente às **20h (BRT)** com envio de resumo por e-mail.
+Dashboard diário dos principais contratos de derivativos e indicadores do mercado brasileiro, atualizado automaticamente às **21h (BRT)** com envio de resumo por e-mail.
 
 **Dashboard:** https://jmagomez.github.io/b3-derivatives-dashboard/
 
@@ -29,7 +29,7 @@ Dashboard diário dos principais contratos de derivativos e indicadores do merca
   A série **7 (Ibovespa à vista) foi descontinuada**: responde HTTP 200 com corpo vazio para qualquer intervalo, inclusive 2020. Nunca gerou dados e o gráfico correspondente nunca renderizou — foi substituída por `^BVSP` no Yahoo.
 - **Yahoo Finance** (via `yfinance`): `^GSPC` (S&P 500), `^IXIC` (Nasdaq Composite), `BTC-USD` (Bitcoin) e `^BVSP` (Ibovespa à vista), desde 02/01/2020.
   Não há alternativa gratuita e estável para S&P 500 e Nasdaq Composite com histórico diário longo: os índices são licenciados e a redistribuição é paga; o Stooq bloqueia acesso programático; o FRED publica o S&P 500 mas não o Nasdaq Composite.
-  **Somente fechamentos consolidados são gravados** — a barra da sessão em curso, que o Yahoo devolve com valor intradiário, é descartada. O corte é **por ativo**, não uma data única: às 20h BRT (23:00 UTC) os índices do dia já fecharam (NY às 20:00/21:00 UTC, B3 às 21:00 UTC), mas a barra diária do bitcoin só fecha à meia-noite UTC. Um corte único descartaria o fechamento do dia dos índices à toa e deixaria as séries um dia atrasadas.
+  **Somente fechamentos consolidados são gravados** — a barra da sessão em curso, que o Yahoo devolve com valor intradiário, é descartada. O corte é **por ativo**, não uma data única, porque cada mercado fecha num horário diferente: NY às 20:00/21:00 UTC, B3 às 21:00 UTC e a barra diária do bitcoin só à meia-noite UTC. Com o agendamento às 00:00 UTC as quatro séries do pregão anterior já estão fechadas, mas a regra por ativo mantém a coleta correta mesmo se o horário mudar.
 - **EIA (U.S. Energy Information Administration)**: `api.eia.gov/v2/petroleum/pri/spt` — Brent Dated (RBRTE), WTI Spot (RWTC) e produtos (gasolina, diesel/heating oil, jet fuel), desde 2020. Requer uma chave de API gratuita.
 
 ## Configuração (uma única vez)
@@ -50,12 +50,20 @@ Dashboard diário dos principais contratos de derivativos e indicadores do merca
 
 ## Funcionamento
 
-- `daily.yml`: todo dia às 23:00 UTC (20h BRT do mesmo dia) — busca o pregão (janela de recuperação de 10 dias; se o arquivo do dia ainda não estiver publicado, entra no dia seguinte), atualiza `data/`, regenera `docs/data/` e envia o e-mail.
+- `daily.yml`: todo dia às 00:00 UTC (21h BRT do dia anterior) — busca o pregão (janela de recuperação de 10 dias; se o arquivo do dia ainda não estiver publicado, entra no dia seguinte), atualiza `data/`, regenera `docs/data/` e envia o e-mail.
 - `backfill.yml`: preenche intervalos de datas (acionamento manual).
 
 ### Sobre o horário
 
-Às 20h BRT o pregão da B3 já encerrou (18h) e o de Nova York também (17h/18h BRT), então o e-mail sai com o fechamento do próprio dia. A contrapartida é que a B3 publica o `TradeInformationConsolidatedFile` com atraso variável: se o arquivo do dia ainda não estiver disponível às 20h, a janela de recuperação de 10 dias o pega na execução seguinte. Por isso o campo `frescor` e o aviso de defasagem importam — eles distinguem "atraso normal de publicação" de "coleta quebrada".
+`00:00 UTC` equivale a **21h BRT do dia anterior** — é o primeiro instante em que todas as fontes daquele pregão estão fechadas ao mesmo tempo:
+
+| Fonte | Fechamento | Situação às 00:00 UTC |
+|---|---|---|
+| B3 (contratos, ^BVSP) | 18h BRT = 21:00 UTC | fechado há 3h |
+| NY (S&P 500, Nasdaq) | 20:00 UTC (verão) / 21:00 UTC (inverno) | fechado |
+| BTC-USD | barra diária fecha 00:00 UTC | acabou de fechar |
+
+Rodar antes disso (por exemplo às 23:00 UTC) pegaria os índices já fechados mas a barra do bitcoin ainda aberta. A contrapartida é que a B3 publica o `TradeInformationConsolidatedFile` com atraso variável: se o arquivo ainda não estiver disponível, a janela de recuperação de 10 dias o pega na execução seguinte. Por isso o campo `frescor` e o aviso de defasagem importam — eles distinguem "atraso normal de publicação" de "coleta quebrada".
 
 ## Observações
 
