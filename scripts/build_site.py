@@ -93,11 +93,25 @@ def front_month_series(df: pd.DataFrame, code: str) -> list:
     if sub.empty:
         return []
     sub = sub.sort_values(["date", "mat"])
-    first = sub.groupby("date").first().reset_index()
-    return [
-        {"date": r["date"], "value": round(float(r[col]), 4), "venc": r["vencimento"]}
-        for _, r in first.iterrows()
-    ]
+    # Uma LINHA por data, nao o primeiro valor nao-nulo de cada coluna:
+    # `groupby("date").first()` preenche cada coluna independentemente, pulando
+    # NaN. Enquanto so liamos preco e vencimento isso nao aparecia, porque as
+    # linhas sem preco ja sao descartadas acima. Ao ler contratos/volume, o
+    # vencimento da frente sem liquidez registrada herdava o volume de OUTRO
+    # vencimento -- numero plausivel, contrato errado.
+    first = sub.drop_duplicates("date", keep="first")
+    out = []
+    for _, r in first.iterrows():
+        ponto = {"date": r["date"], "value": round(float(r[col]), 4), "venc": r["vencimento"]}
+        # Liquidez do proprio vencimento em tela. Ja vinha sendo coletada em
+        # `contratos`/`volume` e nao aparecia em grafico nenhum de futuros --
+        # preco sem volume esconde se a variacao teve lastro.
+        if pd.notna(r.get("contratos")):
+            ponto["contratos"] = int(r["contratos"])
+        if pd.notna(r.get("volume")):
+            ponto["volume"] = round(float(r["volume"]), 2)
+        out.append(ponto)
+    return out
 
 
 def di_rate(pu: float, ref: dt.date, mat: dt.date):
@@ -141,7 +155,12 @@ def di_front_rate_series(df: pd.DataFrame) -> list:
         r = g.sort_values("dist").iloc[0]
         rate = row_rate(r, ref)
         if rate is not None and 0 < rate < 60:
-            out.append({"date": date, "value": rate, "venc": r["vencimento"]})
+            ponto = {"date": date, "value": rate, "venc": r["vencimento"]}
+            if pd.notna(r.get("contratos")):
+                ponto["contratos"] = int(r["contratos"])
+            if pd.notna(r.get("volume")):
+                ponto["volume"] = round(float(r["volume"]), 2)
+            out.append(ponto)
     return sorted(out, key=lambda x: x["date"])
 
 
