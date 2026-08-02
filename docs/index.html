@@ -330,13 +330,13 @@ async function main(){
   const S = code => series?.[code]?.serie || [];
 
   // Grafico padrao de futuro: linha de preco/taxa + barras de contratos.
-  function futuro(panel, code, titulo, cor, unidade){
+  function futuro(panel, code, titulo, cor, unidade, unidadeBadge=''){
     const serie = S(code);
     if(!serie.length) return;
     const vol = dsVolume(serie);
     const dsets = [ds(code, serie, cor, undefined, !vol)];
     if(vol) dsets.push(vol);
-    lineChart(box(panel, titulo, {badge:lastVal(serie)}), dsets, {
+    lineChart(box(panel, titulo, {badge:lastVal(serie, unidadeBadge)}), dsets, {
       unit: unidade ?? U(code),
       extra: vol ? {scales:{
         x:{type:'time',time:{tooltipFormat:'dd/MM/yyyy'},ticks:{maxTicksLimit:8},grid:{color:'rgba(139,150,171,.07)'}},
@@ -354,7 +354,7 @@ async function main(){
     if(curve.curve_old?.length) dsets.push(ds('1 ano atrás',curve.curve_old.map(p=>({date:p.mat,value:p.rate})),'#8b96ab'));
     lineChart(c,dsets,{isCurve:true,unit:'% a.a.'});
   }
-  futuro(panelEls.juros,'DI1','DI ~1 ano — taxa implícita (% a.a.) e contratos negociados','#4f8ef7','% a.a.');
+  futuro(panelEls.juros,'DI1','DI ~1 ano — taxa implícita (% a.a.) e contratos negociados','#4f8ef7','% a.a.','%');
 
   // Câmbio
   futuro(panelEls.cambio,'DOL','Dólar futuro (1º vencimento) — R$/US$ mil e contratos','#f7b84f');
