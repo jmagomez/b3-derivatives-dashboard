@@ -93,13 +93,19 @@ def front_month_series(df: pd.DataFrame, code: str) -> list:
     if sub.empty:
         return []
     sub = sub.sort_values(["date", "mat"])
-    first = sub.groupby("date").first().reset_index()
+    # Uma LINHA por data, nao o primeiro valor nao-nulo de cada coluna:
+    # `groupby("date").first()` preenche cada coluna independentemente, pulando
+    # NaN. Enquanto so liamos preco e vencimento isso nao aparecia, porque as
+    # linhas sem preco ja sao descartadas acima. Ao ler contratos/volume, o
+    # vencimento da frente sem liquidez registrada herdava o volume de OUTRO
+    # vencimento -- numero plausivel, contrato errado.
+    first = sub.drop_duplicates("date", keep="first")
     out = []
     for _, r in first.iterrows():
         ponto = {"date": r["date"], "value": round(float(r[col]), 4), "venc": r["vencimento"]}
         # Liquidez do proprio vencimento em tela. Ja vinha sendo coletada em
-        # `contratos`/`volume` (98% dos dias) e nao aparecia em grafico nenhum
-        # de futuros -- preco sem volume esconde se a variacao teve lastro.
+        # `contratos`/`volume` e nao aparecia em grafico nenhum de futuros --
+        # preco sem volume esconde se a variacao teve lastro.
         if pd.notna(r.get("contratos")):
             ponto["contratos"] = int(r["contratos"])
         if pd.notna(r.get("volume")):
