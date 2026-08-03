@@ -81,6 +81,13 @@
     width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s ease;
   }
   .reset-zoom:hover{color:var(--txt);border-color:var(--acc)}
+  .escala-btn{
+    background:var(--card-hi);border:1px solid var(--border);border-radius:6px;color:var(--muted);
+    height:26px;padding:0 9px;display:flex;align-items:center;cursor:pointer;font-size:11px;
+    font-family:inherit;font-weight:600;letter-spacing:.02em;transition:all .15s ease;
+  }
+  .escala-btn:hover{color:var(--txt);border-color:var(--acc)}
+  .escala-btn.on{background:var(--acc);border-color:var(--acc);color:#fff}
   .chart-wrap{position:relative;height:320px}
   canvas{max-height:320px}
   .panel-note{color:var(--muted-dim);font-size:12px;line-height:1.5;margin:0}
@@ -215,6 +222,39 @@ function dsVolume(serie,color='rgba(139,150,171,.35)'){
 function escalaVolume(serie){
   const max = Math.max(...serie.filter(p=>p.contratos!=null).map(p=>p.contratos));
   return {yVol:{position:'right', max:max*4, beginAtZero:true, display:false, grid:{drawOnChartArea:false}}};
+}
+
+// Alinha varias series numa unica grade de datas, preenchendo com null o que
+// falta. Sem isso o modo 'index' do Chart.js casa POSICAO no array, nao data:
+// o bitcoin negocia todo dia e os indices so em pregao, entao o indice 800 do
+// BTC cai em 12/03/2022 e o do S&P em 08/03/2023. O tooltip comparava dias
+// diferentes -- e, passado o fim das series mais curtas, so sobrava o BTC.
+function alinharPorData(series){
+  const datas = [...new Set(series.flatMap(([, pts]) => pts.map(p => p.date)))].sort();
+  return series.map(([label, pts, color]) => {
+    const mapa = new Map(pts.map(p => [p.date, p.value]));
+    return [label, datas.map(d => ({date: d, value: mapa.has(d) ? mapa.get(d) : null})), color];
+  });
+}
+
+// Alterna o eixo Y entre logaritmico e linear. Numa comparacao base 100 de
+// varios anos a diferenca nao e estetica: em escala log, inclinacoes iguais
+// sao variacoes percentuais iguais, e uma serie que multiplicou por 20 deixa
+// de achatar as outras contra o eixo.
+function botaoEscala(canvas, chart, inicial='logarithmic'){
+  const tools = canvas.closest('.chartbox').querySelector('.chartbox-tools');
+  const b = document.createElement('button');
+  b.className = 'escala-btn' + (inicial === 'logarithmic' ? ' on' : '');
+  b.textContent = 'log';
+  b.title = 'Alternar entre escala logarítmica e linear';
+  b.onclick = () => {
+    const log = chart.options.scales.y.type !== 'logarithmic';
+    chart.options.scales.y.type = log ? 'logarithmic' : 'linear';
+    b.classList.toggle('on', log);
+    chart.update();
+  };
+  tools.insertBefore(b, tools.firstChild);
+  return b;
 }
 
 function box(panel, title, {badge=''}={}){
@@ -432,13 +472,25 @@ async function main(){
         return [lbl,(b?pts.map(p=>({date:p.date,value:p.value/b*100})):[]),color];
       }).filter(([,pts])=>pts.length);
       if(rebase.length>1){
-        lineChart(box(panelEls.global,`Evolução comparada — base 100 em ${fmtDate(inicio)}`),
-          rebase.map(([lbl,pts,color])=>ds(lbl,pts,color)),{unit:'base 100'});
+        const alinhado = alinharPorData(rebase);
+        const dsets = alinhado.map(([lbl,pts,color])=>{
+          const d = ds(lbl,pts,color);
+          d.spanGaps = true;   // indices nao negociam fim de semana; o null nao e buraco de dado
+          return d;
+        });
+        const cv = box(panelEls.global,`Evolução comparada — base 100 em ${fmtDate(inicio)}`);
+        // Escala log por padrao: o BTC passa de 1.800 no pico e os indices ficam
+        // entre 85 e 300, entao no linear as tres curvas de indice viram uma
+        // linha so no rodape. O eixo se reajusta sozinho ao esconder uma serie
+        // na legenda (com o BTC oculto, o topo cai de 2.000 para 300).
+        const ch = lineChart(cv, dsets, {unit:'base 100',
+          y:{type:'logarithmic', ticks:{callback:v=>nf.format(v)}}});
+        botaoEscala(cv, ch);
       }
     }
 
     const note=document.createElement('p');note.className='panel-note';
-    note.textContent='Fonte: Yahoo Finance (^GSPC, ^IXIC, BTC-USD). Fechamentos consolidados — a barra da sessão em curso é descartada, então o dado mais recente é sempre o do último dia fechado, nunca um valor intradiário. Bitcoin negocia todos os dias; os índices, só em dias de pregão — por isso as séries têm contagens de pontos diferentes. Índices em pontos: não é retorno total, não incluem dividendos.';
+    note.textContent='Fonte: Yahoo Finance (^GSPC, ^IXIC, BTC-USD). Fechamentos consolidados — a barra da sessão em curso é descartada, então o dado mais recente é sempre o do último dia fechado, nunca um valor intradiário. Bitcoin negocia todos os dias; os índices, só em dias de pregão — por isso as séries têm contagens de pontos diferentes. No gráfico comparado as séries são alinhadas por data, e o eixo vem em escala logarítmica (botão “log” para alternar): nela, inclinações iguais significam variações percentuais iguais. Clique na legenda para esconder uma série — o eixo se reajusta às que sobrarem. Índices em pontos: não é retorno total, não incluem dividendos.';
     panelEls.global.appendChild(note);
   } else {
     panelEls.global.innerHTML='<div class="empty">Sem dados de índices globais ainda — rode a atualização diária ou o backfill.</div>';
