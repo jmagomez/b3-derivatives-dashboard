@@ -210,12 +210,40 @@ def markets_payload() -> dict:
     return out
 
 
+def ultimo_dia_util(serie: list) -> list:
+    """Filtra uma serie [{date, value}, ...], mantendo so pontos em dia util
+    (segunda a sexta).
+
+    O bitcoin negocia 7 dias por semana (ver docstring de fetch_markets.py) e
+    de proposito NAO e filtrado na serie completa -- o grafico da aba Global
+    ganha com o dado de fim de semana. Mas o CARD de resumo, que fica lado a
+    lado com contratos da B3/indices que so tem ponto em dia de pregao, nao
+    pode simplesmente pegar o ultimo ponto: no sabado/domingo isso mostra uma
+    data que nenhum outro indicador do dashboard tem, e no fim de semana o
+    card do bitcoin passa a exibir sabado/domingo em vez da sexta-feira (o
+    ultimo dia util antes do sabado, o mesmo dia que B3/SP500/Nasdaq/Ibovespa
+    mostram).
+
+    Nao considera feriados de B3/NYSE, so fins de semana -- um feriado no meio
+    da semana ainda pode gerar 1 dia de descompasso, caso raro e aceito (a B3
+    ja e a fonte de verdade para dias uteis nos outros contratos; replicar o
+    calendario de feriados aqui exigiria uma fonte extra so para isso).
+    """
+    return [p for p in serie if dt.date.fromisoformat(str(p["date"])[:10]).weekday() < 5]
+
+
 def card(code: str, label: str, unit: str, serie: list):
-    """Card de resumo a partir de uma serie [{date, value}, ...]."""
-    if not serie:
+    """Card de resumo a partir de uma serie [{date, value}, ...].
+
+    Usa ultimo_dia_util(): sem isso, series que negociam fim de semana (hoje,
+    so o bitcoin) fariam o card mostrar sabado/domingo em vez do ultimo
+    pregao -- ver docstring de ultimo_dia_util.
+    """
+    uteis = ultimo_dia_util(serie)
+    if not uteis:
         return None
-    cur = serie[-1]
-    prev = serie[-2] if len(serie) >= 2 else None
+    cur = uteis[-1]
+    prev = uteis[-2] if len(uteis) >= 2 else None
     var = None
     if prev and prev["value"]:
         var = round((cur["value"] / prev["value"] - 1) * 100, 2)
@@ -302,10 +330,16 @@ def main():
     # como se fosse o fechamento de hoje.
     hoje = dt.date.today()
     frescor = {}
+    # "markets" usa o SP500 como representante dos indices (S&P/Nasdaq/Ibovespa),
+    # que so tem ponto em dia de pregao -- por isso nunca acusa atraso do
+    # bitcoin, que e rastreado a parte (proxima linha) por negociar fim de
+    # semana e poder ficar defasado mesmo com o SP500 em dia.
+    btc_util = ultimo_dia_util(markets.get("btc", []))
     fontes = [
         ("b3", summary.get("last_date")),
         ("eia", eia["brent"][-1]["date"] if eia.get("brent") else None),
         ("markets", markets["sp500"][-1]["date"] if markets.get("sp500") else None),
+        ("btc", btc_util[-1]["date"] if btc_util else None),
         ("bcb", max((r["date"] for r in bcb.get("selic", [])), default=None)),
     ]
     for nome, ultima in fontes:

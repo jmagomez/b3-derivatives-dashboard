@@ -65,13 +65,20 @@ Dashboard diário dos principais contratos de derivativos e indicadores do merca
 
 Rodar antes disso (por exemplo às 23:00 UTC) pegaria os índices já fechados mas a barra do bitcoin ainda aberta. A contrapartida é que a B3 publica o `TradeInformationConsolidatedFile` com atraso variável: se o arquivo ainda não estiver disponível, a janela de recuperação de 10 dias o pega na execução seguinte. Por isso o campo `frescor` e o aviso de defasagem importam — eles distinguem "atraso normal de publicação" de "coleta quebrada".
 
+### Bitcoin: card de resumo vs. gráfico
+
+O bitcoin negocia 7 dias por semana; B3, BCB, EIA e os índices do Yahoo (S&P 500, Nasdaq, Ibovespa à vista) só em dia útil. Isso cria duas necessidades diferentes:
+
+- **Gráfico da aba Global**: mantém sábado e domingo de propósito — é dado real, e descartá-lo jogaria fora informação (ver `test_btc_tem_fim_de_semana_e_indices_nao` em `tests/test_markets.py`).
+- **Card de resumo**: fica ao lado de indicadores que só têm ponto em dia de pregão, então precisa da mesma referência de data. Sem tratamento, no fim de semana o card pegaria o último ponto da série (sábado ou domingo) — uma data que nenhum outro indicador do dashboard tem, e diferente do que a maioria mostra (o último pregão, sexta-feira). `card()` em `scripts/build_site.py` filtra para o último **dia útil** (`ultimo_dia_util()`) antes de pegar o mais recente, então o card do bitcoin sempre mostra "o último dia útil antes do sábado" quando é fim de semana — a mesma data que B3/S&P 500/Nasdaq/Ibovespa já mostram. Essa checagem é só de fim de semana (segunda a sexta = dia útil), não considera feriados de B3/NYSE — um feriado no meio da semana ainda pode gerar 1 dia de descompasso pontual, caso raro e aceito por ora.
+
 ## Observações
 
 - Taxas do DI vêm diretamente do campo `AdjstdQtTax` da B3 (quando ausente, são implícitas do PU com dias úteis aproximados).
 - Crack spread = preço do produto (US$/gal) × 42 − Brent Dated (US$/bbl).
 - `scripts/fetch_options.py` é legado (fonte antiga descontinuada pela B3) e não é mais usado.
 - **FRC é cotado em taxa (% a.a.), não em PU.** O arquivo da B3 traz `AdjstdQt` vazio e o valor em `AdjstdQtTax` para esse contrato; a série era montada a partir do PU e por isso saía vazia, apesar dos 11.841 registros já coletados.
-- **Detecção de defasagem**: `summary.json` traz um bloco `frescor` com a data mais recente e o atraso em dias de cada fonte (B3, BCB, EIA, Yahoo). O dashboard e o e-mail exibem um aviso quando alguma fonte passa do limite tolerado. Sem isso uma quebra na coleta passa batida — o dashboard continua publicando o último fechamento bom como se fosse o de hoje.
+- **Detecção de defasagem**: `summary.json` traz um bloco `frescor` com a data mais recente e o atraso em dias de cada fonte (B3, BCB, EIA, Yahoo, Bitcoin). O dashboard e o e-mail exibem um aviso quando alguma fonte passa do limite tolerado. Sem isso uma quebra na coleta passa batida — o dashboard continua publicando o último fechamento bom como se fosse o de hoje. O bitcoin é rastreado à parte dos outros ativos do Yahoo (`btc`, separado de `markets`): como ele negocia fim de semana e os demais (S&P 500, Nasdaq, Ibovespa à vista) não, usar só o S&P 500 como termômetro de frescor nunca acusaria um atraso específico do bitcoin — ver "Bitcoin: card de resumo vs. gráfico" acima.
 - **Ausência de arquivo ≠ falha de coleta.** A B3 às vezes responde HTTP 200 com uma página HTML (bloqueio/limite de taxa) em vez do CSV. Antes os dois casos eram tratados igual e o dia entrava na conta de "sem pregão", criando buracos silenciosos no histórico. Agora `fetch_b3` valida a assinatura do arquivo e separa `ArquivoIndisponivel` (definitivo) de `FalhaFonte` (retentável, reportado).
 - Índices são em **pontos**, não retorno total: não incluem dividendos. Bitcoin negocia 7 dias por semana e os índices só em dias de pregão — as séries têm contagens de pontos diferentes de propósito.
 - Uso informativo. Não constitui recomendação de investimento.
