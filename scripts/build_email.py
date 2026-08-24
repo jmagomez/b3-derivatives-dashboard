@@ -12,9 +12,13 @@ PAGES_URL = os.environ.get("PAGES_URL", "")
 EM_PONTOS_PERCENTUAIS = {"DI1", "FRC"}
 
 # Defasagem tolerada por fonte, em dias corridos.
-LIMITES = {"b3": 4, "bcb": 5, "eia": 12, "markets": 4}
+# "btc" e rastreado a parte de "markets" (SP500/Nasdaq/Ibovespa): o bitcoin
+# negocia fim de semana e pode ficar defasado mesmo com os indices em dia --
+# ver ultimo_dia_util()/card() em scripts/build_site.py.
+LIMITES = {"b3": 4, "bcb": 5, "eia": 12, "markets": 4, "btc": 4}
 NOMES = {"b3": "contratos da B3", "bcb": "indicadores do BCB",
-         "eia": "petroleo (EIA)", "markets": "indices globais/BTC"}
+         "eia": "petroleo (EIA)", "markets": "S&P 500/Nasdaq/Ibovespa (Yahoo)",
+         "btc": "Bitcoin (Yahoo)"}
 
 
 def fmt(v):
