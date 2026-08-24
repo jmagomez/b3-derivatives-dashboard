@@ -321,8 +321,10 @@ async function main(){
   document.getElementById('statusDot').style.boxShadow = summary?.last_date ? '0 0 8px var(--up)' : 'none';
 
   // Aviso de defasagem: uma quebra silenciosa na coleta nao pode passar batida.
-  const FONTES = {b3:'contratos da B3', bcb:'indicadores do BCB', eia:'petróleo (EIA)', markets:'índices globais/BTC'};
-  const LIMITE = {b3:4, bcb:5, eia:12, markets:4};  // dias corridos tolerados
+  // "btc" e rastreado a parte de "markets" (SP500/Nasdaq/Ibovespa): o bitcoin
+  // negocia fim de semana e pode ficar defasado mesmo com os indices em dia.
+  const FONTES = {b3:'contratos da B3', bcb:'indicadores do BCB', eia:'petróleo (EIA)', markets:'S&P 500/Nasdaq/Ibovespa (Yahoo)', btc:'Bitcoin (Yahoo)'};
+  const LIMITE = {b3:4, bcb:5, eia:12, markets:4, btc:4};  // dias corridos tolerados
   const atrasadas = Object.entries(summary?.frescor||{})
     .filter(([k,v])=>v.dias > (LIMITE[k]??7))
     .map(([k,v])=>`<b>${FONTES[k]||k}</b> parado em ${fmtDate(v.last_date)} (${v.dias} dias)`);
@@ -515,7 +517,7 @@ async function main(){
   // Macro
   if(bcb?.cdi?.length) lineChart(box(panelEls.macro,'CDI diário (% a.d.)',{badge:lastVal(bcb.cdi,'%')}),[ds('CDI',bcb.cdi,'#4f8ef7',undefined,true)],{unit:'% a.d.'});
   if(bcb?.selic?.length) lineChart(box(panelEls.macro,'Selic diário (% a.d.)',{badge:lastVal(bcb.selic,'%')}),[ds('Selic',bcb.selic,'#2ecc71',undefined,true)],{unit:'% a.d.'});
-  if(bcb?.ipca?.length) lineChart(box(panelEls.macro,'IPCA mensal (%)',{badge:lastVal(bcb.ipca,'%')}),[ds('IPCA',bcb.ipca,'#e74c3c',undefined,true)],{unit:'%'});
+  if(bcb?.ipca?.length) lineChart(box(panelEls.macro,'IPCA mensal (%)',{badge:lastVal(bcb.ipca,'%')}),[ds('IPCA',bcb.ipca,'#e74c3c',undefined,true)],{unit:'% a.d.'});
 }
 main();
 </script>
