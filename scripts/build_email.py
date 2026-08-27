@@ -36,6 +36,24 @@ def fmt_date(iso):
     return s
 
 
+def mensagens_atraso(frescor: dict, limites: dict = LIMITES, nomes: dict = NOMES) -> list:
+    """Monta as mensagens de aviso para fontes com atraso acima do limite tolerado.
+
+    Funcao pura, extraida de main() para ser testavel sem tocar em disco (ver
+    tests/test_build_email.py). Devolve uma lista de strings "<fonte> parado em
+    <data> (<n> dias)", uma por fonte defasada, na mesma ordem alfabetica das
+    chaves de `frescor`. Lista vazia = nada defasado, sem aviso no e-mail.
+
+    `dias` ausente/None (ex.: data mal formada) nao gera aviso -- e tratado como
+    "sem informacao de frescor", nao como "defasado".
+    """
+    return [
+        f"{nomes.get(k, k)} parado em {fmt_date(v.get('last_date'))} ({v.get('dias')} dias)"
+        for k, v in sorted(frescor.items())
+        if v.get("dias") is not None and v["dias"] > limites.get(k, 7)
+    ]
+
+
 def main():
     with open(SUMMARY) as f:
         s = json.load(f)
@@ -58,11 +76,7 @@ def main():
     # Aviso de defasagem: sem isso o e-mail diario apresenta o ultimo fechamento
     # bom como se fosse o de hoje, e uma quebra na coleta passa semanas sem ser
     # notada.
-    atrasadas = [
-        f"{NOMES.get(k, k)} parado em {fmt_date(v.get('last_date'))} ({v.get('dias')} dias)"
-        for k, v in sorted(s.get("frescor", {}).items())
-        if v.get("dias") is not None and v["dias"] > LIMITES.get(k, 7)
-    ]
+    atrasadas = mensagens_atraso(s.get("frescor", {}))
     aviso = ""
     if atrasadas:
         aviso = (
