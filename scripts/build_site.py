@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 import analytics
+from fontes import FONTES, LIMITE_PADRAO
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 AJUSTES_DIR = os.path.join(ROOT, "data", "ajustes")
@@ -369,9 +370,12 @@ def main():
     ]
     for nome, ultima in fontes:
         if ultima:
+            rotulo, limite = FONTES.get(nome, (nome, LIMITE_PADRAO))
             frescor[nome] = {
                 "last_date": str(ultima)[:10],
                 "dias": (hoje - dt.date.fromisoformat(str(ultima)[:10])).days,
+                "nome": rotulo,
+                "limite": limite,
             }
     summary["frescor"] = frescor
 
