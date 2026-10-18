@@ -93,6 +93,26 @@
   .panel-note{color:var(--muted-dim);font-size:12px;line-height:1.5;margin:0}
   .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;background:var(--card);border-radius:10px;border:1px dashed var(--border)}
 
+
+  .lagtag{font-size:10.5px;color:#f0b86e;margin-top:4px;cursor:help}
+  .tblwrap{overflow-x:auto;margin-bottom:6px}
+  .tbl{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+  .tbl th{color:var(--muted);font-weight:600;text-align:right;padding:7px 9px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .tbl td{padding:7px 9px;text-align:right;border-bottom:1px solid rgba(35,44,66,.6);white-space:nowrap}
+  .tbl th:first-child,.tbl td:first-child{text-align:left}
+  .tbl tbody tr:hover td{background:var(--card-hi)}
+  .tbl tr.bench td{color:var(--muted);font-style:italic}
+  .tbl .tip{border-bottom:1px dotted var(--muted-dim);cursor:help}
+  .pos{color:var(--up)} .neg{color:var(--dn)} .nd{color:var(--muted-dim)}
+  .sub-ref{color:var(--muted-dim);font-size:10.5px;font-weight:400}
+  .heat th,.heat td{text-align:center}
+  .heat td{color:#fff;font-weight:600;min-width:84px}
+  .secao{font-size:13px;font-weight:700;color:var(--txt);margin:18px 0 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .secao .seg{display:flex;gap:6px;margin-left:auto}
+  .panel-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:8px}
+  .metodo{color:var(--muted);font-size:12px;line-height:1.6;margin:14px 0 0;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--card)}
+  .metodo b{color:var(--txt)}
+
   .stale{
     margin:10px 0 0;padding:8px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;
     background:rgba(231,76,60,.10);border:1px solid rgba(231,76,60,.35);color:#f0a89f;max-width:900px;
@@ -130,7 +150,7 @@
 <script>
 const TABS = [
   ["juros","Juros (DI)"],["cambio","Câmbio"],["ibov","Ibovespa"],
-  ["global","Global (BTC, S&P, Nasdaq)"],
+  ["global","Global (BTC, S&P, Nasdaq)"],["risco","Risco & Retorno"],
   ["commod","Commodities"],["cupom","Cupom cambial"],["petroleo","Petróleo"],
   ["opcoes","Opções"],["macro","Indicadores BCB"]
 ];
@@ -309,9 +329,18 @@ function applyRange(days){
   });
 }
 
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Dias úteis (seg–sex) em (a, b]. Não conhece feriados — é só um indicador de defasagem.
+function diasUteisEntre(a,b){
+  const d=new Date(a+'T00:00:00Z'), fim=new Date(b+'T00:00:00Z'); let n=0;
+  while(d<fim){ d.setUTCDate(d.getUTCDate()+1); const w=d.getUTCDay(); if(w!==0&&w!==6) n++; }
+  return n;
+}
+
 async function main(){
-  const [series,curve,bcb,opcoes,summary,eia,markets] = await Promise.all(
-    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json','eia.json','markets.json']
+  const [series,curve,bcb,opcoes,summary,eia,markets,ana] = await Promise.all(
+    ['series.json','di_curve.json','bcb.json','opcoes.json','summary.json','eia.json','markets.json','analytics.json']
       .map(f=>fetch('data/'+f).then(r=>r.ok?r.json():null).catch(()=>null)));
 
   summaryLastDate = summary?.last_date || null;
@@ -323,11 +352,11 @@ async function main(){
   // Aviso de defasagem: uma quebra silenciosa na coleta nao pode passar batida.
   // "btc" e rastreado a parte de "markets" (SP500/Nasdaq/Ibovespa): o bitcoin
   // negocia fim de semana e pode ficar defasado mesmo com os indices em dia.
-  const FONTES = {b3:'contratos da B3', bcb:'indicadores do BCB', eia:'petróleo (EIA)', markets:'S&P 500/Nasdaq/Ibovespa (Yahoo)', btc:'Bitcoin (Yahoo)'};
-  const LIMITE = {b3:4, bcb:5, eia:12, markets:4, btc:4};  // dias corridos tolerados
+  // nome e limite vem de summary.json (gravados por build_site.py a partir de scripts/fontes.py):
+  // uma unica definicao para dashboard e e-mail.
   const atrasadas = Object.entries(summary?.frescor||{})
-    .filter(([k,v])=>v.dias > (LIMITE[k]??7))
-    .map(([k,v])=>`<b>${FONTES[k]||k}</b> parado em ${fmtDate(v.last_date)} (${v.dias} dias)`);
+    .filter(([k,v])=>v.dias > (v.limite ?? 7))
+    .map(([k,v])=>`<b>${esc(v.nome||k)}</b> parado em ${fmtDate(v.last_date)} (${v.dias} dias)`);
   if(atrasadas.length){
     const w=document.getElementById('staleWarn');
     w.hidden=false;
@@ -342,11 +371,15 @@ async function main(){
     const v = it.var_pct;
     const vTxt = v==null?'—':(v>=0?'▲ +':'▼ ')+nf.format(Math.abs(v))+(isDI?' p.p.':'%');
     const trend = v==null?'':(v>=0?'up':'dn');
+    // Selo quando a cotação do card é mais antiga que o último pregão da B3: o dashboard
+    // mistura fontes que publicam em ritmos diferentes (bitcoin/Yahoo, petróleo/EIA).
+    const lag = (summary?.last_date && it.date && it.date < summary.last_date) ? diasUteisEntre(it.date, summary.last_date) : 0;
+    const lagTag = lag>0 ? `<div class="lagtag" title="Última cotação disponível desta fonte: ${fmtDate(it.date)}. Último pregão da B3: ${fmtDate(summary.last_date)}. A variação do card compara com o dia útil anterior da própria série.">⏱ ${lag} d.ú. de defasagem</div>` : '';
     const el=document.createElement('div');el.className='card'+(trend?' '+trend:'');
     el.innerHTML=`<div class="lbl">${it.label}${it.venc?' ('+it.venc+')':''}</div>
       <div class="val">${nf.format(it.value)}<span class="unit">${it.unit||''}</span></div>
       <div class="var" style="color:${v==null?'var(--muted)':(v>=0?'var(--up)':'var(--dn)')}">${vTxt}</div>
-      <div class="ref">Ref.: ${fmtDate(it.date)}</div>`;
+      <div class="ref">Ref.: ${fmtDate(it.date)}</div>${lagTag}`;
     cards.appendChild(el);
   });
 
@@ -498,6 +531,141 @@ async function main(){
     panelEls.global.innerHTML='<div class="empty">Sem dados de índices globais ainda — rode a atualização diária ou o backfill.</div>';
   }
 
+
+  // Risco & Retorno — números calculados em scripts/analytics.py (testado); aqui só apresentação.
+  (function riscoRetorno(){
+    const p = panelEls.risco;
+    if(!ana){
+      const st = summary?.analytics_status;
+      p.innerHTML = '<div class="empty">Análise de risco/retorno indisponível'
+        + (st && st.ok===false ? ' — falha na geração: '+esc(st.erro) : ' (aguarde a próxima atualização diária)') + '.</div>';
+      return;
+    }
+    const nf2 = new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const nf0 = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0});
+    const nf1 = new Intl.NumberFormat('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
+    const cls = v => v==null?'nd':(v>0?'pos':(v<0?'neg':''));
+    const sg  = (v,f=nf2) => v==null?'n/d':(v>0?'+':'')+f.format(v);
+    const pct = v => v==null?'<span class="nd">n/d</span>':`<span class="${cls(v)}">${sg(v)}%</span>`;
+    const neutro = (v,suf='%') => v==null?'<span class="nd">n/d</span>':`${nf2.format(v)}${suf}`;
+    const mes = iso => iso? iso.slice(5,7)+'/'+iso.slice(0,4) : '';
+    const asOf = ana.as_of;
+    const JAN = ['1M','3M','6M','12M','YTD'];
+    const defas = (ref,rotulo) => (ref && ref!==asOf) ? ` <span class="sub-ref" title="${rotulo}: última cotação disponível em ${fmtDate(ref)}; referência do painel: ${fmtDate(asOf)}.">(até ${fmtDate(ref)})</span>` : '';
+    const L = c => ana.linhas.find(x=>x.codigo===c);
+
+    // KPIs
+    const kpi = (lbl,val,sub,ref,trend='') => `<div class="card ${trend}"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="var" style="color:var(--muted)">${sub}</div><div class="ref">${ref}</div></div>`;
+    const k = [];
+    const ib=L('IBOV'), ibu=L('IBOV_USD');
+    if(ib) k.push(kpi('Ibovespa — 12 meses (R$)', sg(ib.ret['12M'])+'<span class="unit">%</span>',
+        `US$: ${sg(ibu?.ret['12M'])}% · CDI: ${sg(ana.cdi?.ret['12M'])}%`, `Preço, sem dividendos · ref. ${fmtDate(ib.ref)}`, ib.ret['12M']>=0?'up':'dn'));
+    const jr = ana.juro_real;
+    if(jr) k.push(kpi('Juro real ex-post — 12 meses', sg(jr.real_12m)+'<span class="unit">%</span>',
+        `CDI ${nf2.format(jr.cdi_12m)}% · IPCA ${nf2.format(jr.ipca_12m)}%`, `Janela do último IPCA: ${mes(jr.janela_ini)} a ${mes(jr.janela_fim)}`, jr.real_12m>=0?'up':''));
+    const ca = ana.cdi?.anualizado_atual;
+    if(ca) k.push(kpi('CDI — taxa anualizada', nf2.format(ca.pct)+'<span class="unit">% a.a.</span>', 'Taxa diária mais recente × 252 dias úteis', `Ref.: ${fmtDate(ca.data)}`));
+    const cv = ana.curva;
+    if(cv){
+      const um = cv.prazos.find(x=>x.anos===1);
+      k.push(kpi('Curva DI — inclinação 3a − 1a', sg(cv.inclinacao_3a_1a_bp.atual,nf0)+'<span class="unit">bp</span>',
+        `12M atrás: ${sg(cv.inclinacao_3a_1a_bp.antes,nf0)} bp`, `DI 1a: ${neutro(um?.atual)} a.a. (${sg(um?.var_bp,nf0)} bp em 12M) · ${fmtDate(cv.ref)}`));
+    }
+    const bi = ana.base_ind?.ultimo;
+    if(bi) k.push(kpi(`Base do IND${bi.venc?' ('+bi.venc+')':''} s/ à vista`, sg(bi.pct)+'<span class="unit">%</span>',
+        `${nf0.format(bi.pts)} pts (ajuste do futuro − fechamento à vista)`, `Não anualizada · ${fmtDate(bi.date)}`));
+    p.insertAdjacentHTML('beforeend', `<div class="panel-kpis">${k.join('')}</div>`);
+
+    // Tabela retorno × risco
+    const th = JAN.map(j=>`<th>${j==='YTD'?'No ano':j}</th>`).join('');
+    const linha = l => {
+      const ex = l.extremos_12m;
+      const tipVol = ex ? `Melhor dia (12M): ${sg(ex.melhor.pct)}% em ${fmtDate(ex.melhor.data)} · Pior dia: ${sg(ex.pior.pct)}% em ${fmtDate(ex.pior.data)}` : 'Histórico insuficiente para 12M';
+      const dd = l.dd12m;
+      return `<tr><td>${esc(l.rotulo)} <span class="sub-ref">${esc(l.moeda)}</span>${defas(l.ref,l.rotulo)}</td>`
+        + JAN.map(j=>`<td>${pct(l.ret[j])}</td>`).join('')
+        + `<td>${neutro(l.vol['3M'])}</td><td><span class="tip" title="${esc(tipVol)}">${neutro(l.vol['12M'])}</span></td>`
+        + `<td>${dd?`<span class="tip neg" title="Vale em ${fmtDate(dd.vale)}">${nf2.format(dd.max)}%</span>`:'<span class="nd">n/d</span>'}</td>`
+        + `<td>${dd?`<span class="${cls(dd.atual)}">${nf2.format(dd.atual)}%</span>`:'<span class="nd">n/d</span>'}</td>`
+        + `<td>${l.sharpe_12m==null?'<span class="nd" title="Sem taxa livre de risco em US$ nos dados do repositório">n/d</span>':nf2.format(l.sharpe_12m)}</td></tr>`;
+    };
+    const cdiRet = ana.cdi?.ret;
+    const cdiRow = cdiRet ? `<tr class="bench"><td>CDI (acumulado) <span class="sub-ref">R$</span>${defas(ana.cdi.ate,'CDI')}</td>`
+      + JAN.map(j=>`<td>${pct(cdiRet[j])}</td>`).join('') + '<td colspan="5" class="nd">benchmark</td></tr>' : '';
+    p.insertAdjacentHTML('beforeend', `<div class="secao">Retorno e risco por ativo e moeda <span class="sub-ref">ref. ${fmtDate(asOf)} · preço, sem dividendos · vol. anualizada (√252)</span></div>
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>Ativo</th>${th}<th>Vol. 3M</th><th>Vol. 12M</th><th>Máx. DD 12M</th><th>DD atual</th><th>Sharpe 12M</th></tr></thead>
+      <tbody>${ana.linhas.map(linha).join('')}${cdiRow}</tbody></table></div>`);
+
+    // Excesso sobre o CDI (só ativos em R$)
+    const exc = ana.linhas.filter(l=>l.excesso_cdi);
+    if(exc.length){
+      p.insertAdjacentHTML('beforeend', `<div class="secao">Retorno excedente ao CDI <span class="sub-ref">p.p., aritmético · só ativos cotados em R$ (o CDI é o ativo livre de risco nessa moeda)</span></div>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Ativo</th>${th}</tr></thead><tbody>
+        ${exc.map(l=>`<tr><td>${esc(l.rotulo)} <span class="sub-ref">${esc(l.moeda)}</span>${defas(l.ref,l.rotulo)}</td>${JAN.map(j=>`<td>${pct(l.excesso_cdi[j])}</td>`).join('')}</tr>`).join('')}
+        </tbody></table></div>`);
+    }
+
+    // Correlação
+    const nomes = {IBOV:'Ibovespa',SP500:'S&P 500',NASDAQ:'Nasdaq',BTC:'Bitcoin'};
+    const cor = c => {
+      if(!c) return '<div class="empty">Amostra insuficiente para esta janela.</div>';
+      const bg = r => r>=0 ? `rgba(79,142,247,${(0.12+0.78*r).toFixed(2)})` : `rgba(231,76,60,${(0.12+0.78*(-r)).toFixed(2)})`;
+      return `<div class="tblwrap"><table class="tbl heat"><thead><tr><th></th>${c.ativos.map(a=>`<th>${nomes[a]||a}</th>`).join('')}</tr></thead><tbody>`
+        + c.matriz.map((row,i)=>`<tr><td>${nomes[c.ativos[i]]||c.ativos[i]}</td>${row.map(r=>`<td style="background:${bg(r)}">${nf2.format(r)}</td>`).join('')}</tr>`).join('')
+        + `</tbody></table></div><div class="panel-note">${c.n} pregões comuns a todos os ativos (${fmtDate(c.inicio)} a ${fmtDate(c.fim)}) · retornos diários de preço, cada um na sua moeda de cotação.</div>`;
+    };
+    const idCor = 'cor'+Math.random().toString(36).slice(2,7);
+    p.insertAdjacentHTML('beforeend', `<div class="secao">Correlação dos retornos diários
+        <span class="seg"><button class="range-btn on" data-w="63">63 pregões (~3M)</button><button class="range-btn" data-w="252">252 pregões (~12M)</button></span></div>
+        <div id="${idCor}-63">${cor(ana.correlacao?.['63'])}</div><div id="${idCor}-252" style="display:none">${cor(ana.correlacao?.['252'])}</div>`);
+    p.querySelectorAll(`.secao .seg button`).forEach(b=>{
+      b.onclick=()=>{ b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+        ['63','252'].forEach(w=>{ document.getElementById(`${idCor}-${w}`).style.display = (w===b.dataset.w)?'':'none'; }); };
+    });
+
+    // Gráficos
+    p.insertAdjacentHTML('beforeend', `<div class="secao">Séries <span class="sub-ref">últimos 3 anos; os botões de período acima também se aplicam</span></div>`);
+    const dd = ana.series?.drawdown;
+    if(dd && Object.values(dd).some(s=>s.length)){
+      const cores={IBOV:'#2ecc71',SP500:'#4f8ef7',NASDAQ:'#7c5cff',BTC:'#f7931a'};
+      lineChart(box(p,'Drawdown desde o pico histórico da série (preço, moeda de cotação; pico desde 2020)'),
+        Object.entries(dd).map(([c,s])=>ds(nomes[c]||c,s,cores[c]||'#8b96ab')),{unit:'%'});
+    }
+    const bu = ana.series?.ibov_brl_usd;
+    if(bu && bu['R$']?.length){
+      const rb = s => { const b=s[0].value; return s.map(x=>({date:x.date,value:x.value/b*100})); };
+      lineChart(box(p,`Ibovespa em R$ vs em US$ (PTAX venda) — base 100 em ${fmtDate(bu['R$'][0].date)}`),
+        [ds('Ibovespa (R$)',rb(bu['R$']),'#2ecc71'),ds('Ibovespa (US$)',rb(bu['US$']),'#4f8ef7')],{unit:'base 100'});
+    }
+    const bs = ana.base_ind?.serie;
+    if(bs?.length){
+      lineChart(box(p,'Base do mini-índice (contrato da frente) sobre o Ibovespa à vista — %',{badge:bi?`${sg(bi.pct)}%`:''}),
+        [ds('Base IND − à vista (%)',bs,'#f7b84f')],{unit:'%'});
+    }
+
+    // Curva DI por prazo
+    if(cv){
+      p.insertAdjacentHTML('beforeend', `<div class="secao">Curva DI em prazos fixos <span class="sub-ref">interpolação linear em dias corridos entre vértices · hoje (${fmtDate(cv.ref)}) vs ${fmtDate(cv.ref_old)}</span></div>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Prazo</th><th>Hoje (% a.a.)</th><th>12M atrás (% a.a.)</th><th>Δ (bp)</th></tr></thead><tbody>
+        ${cv.prazos.map(x=>`<tr><td>${x.anos} ano${x.anos>1?'s':''}</td><td>${x.atual==null?'<span class="nd">n/d</span>':nf2.format(x.atual)}</td><td>${x.antes==null?'<span class="nd">n/d</span>':nf2.format(x.antes)}</td><td>${x.var_bp==null?'<span class="nd">n/d</span>':`<span class="${cls(-x.var_bp)}">${sg(x.var_bp,nf1)}</span>`}</td></tr>`).join('')}
+        <tr class="bench"><td>Inclinação 3a − 1a (bp)</td><td>${sg(cv.inclinacao_3a_1a_bp.atual,nf1)}</td><td>${sg(cv.inclinacao_3a_1a_bp.antes,nf1)}</td><td></td></tr>
+        <tr class="bench"><td>Inclinação 10a − 1a (bp)</td><td>${sg(cv.inclinacao_10a_1a_bp.atual,nf1)}</td><td>${sg(cv.inclinacao_10a_1a_bp.antes,nf1)}</td><td></td></tr>
+        </tbody></table></div>`);
+    }
+
+    // Metodologia e limites — para quem vai auditar os números
+    p.insertAdjacentHTML('beforeend', `<div class="metodo"><b>Metodologia e limites.</b>
+      <b>Retornos</b> são de preço (índices em pontos, sem dividendos). Janela de N meses: base = última cotação em ou antes de (data de referência − N meses); cada ativo usa a sua última cotação até a data de referência (a data própria aparece ao lado quando difere — o bitcoin costuma estar 1 dia útil atrás do último pregão).
+      <b>Volatilidade</b>: desvio-padrão amostral dos retornos diários entre cotações consecutivas × √252; o bitcoin entra só com dias úteis, como no card de resumo.
+      <b>Moedas</b>: a conversão usa a PTAX venda do BCB (média de janelas ~13h BRT), que não é síncrona com o fechamento de NY (~17h BRT) — conversão aproximada; retorno em R$ de ativo em US$ é sem hedge cambial.
+      <b>Sharpe</b> ex-post (média dos excessos diários sobre o CDI ÷ desvio dos excessos, anualizado) só para ativos em R$; para US$ não há taxa livre de risco em US$ nos dados do repositório, por isso n/d.
+      <b>CDI acumulado</b>: taxas datadas em (base, referência]; contar o CDI do dia da base em vez do da referência muda ~0,05 p.p.
+      <b>Juro real</b> = (1+CDI)/(1+IPCA)−1 nos mesmos 12 meses do último IPCA publicado, ex-post (não é juro real esperado).
+      <b>Correlação</b>: pregões comuns a todos os ativos; um feriado em qualquer mercado remove a data de todos. <b>Base do IND</b>: ajuste do futuro vs fechamento do à vista (instantes distintos) — parte é ruído de sincronia e converge a zero no vencimento (serrote a cada rolagem); não é anualizada.
+      <b>Drawdown</b>: queda desde o pico dentro da janela de 12M (tabela) ou desde o pico histórico da série (gráfico).
+      Datas sem cotação são descartadas, nunca interpoladas; onde falta histórico o campo mostra n/d.</div>`);
+  })();
+
   // Opções
   if(opcoes?.length){
     const byM={};
@@ -517,7 +685,7 @@ async function main(){
   // Macro
   if(bcb?.cdi?.length) lineChart(box(panelEls.macro,'CDI diário (% a.d.)',{badge:lastVal(bcb.cdi,'%')}),[ds('CDI',bcb.cdi,'#4f8ef7',undefined,true)],{unit:'% a.d.'});
   if(bcb?.selic?.length) lineChart(box(panelEls.macro,'Selic diário (% a.d.)',{badge:lastVal(bcb.selic,'%')}),[ds('Selic',bcb.selic,'#2ecc71',undefined,true)],{unit:'% a.d.'});
-  if(bcb?.ipca?.length) lineChart(box(panelEls.macro,'IPCA mensal (%)',{badge:lastVal(bcb.ipca,'%')}),[ds('IPCA',bcb.ipca,'#e74c3c',undefined,true)],{unit:'%'});
+  if(bcb?.ipca?.length) lineChart(box(panelEls.macro,'IPCA mensal (% a.m.)',{badge:lastVal(bcb.ipca,'%')}),[ds('IPCA',bcb.ipca,'#e74c3c',undefined,true)],{unit:'%'});
 }
 main();
 </script>

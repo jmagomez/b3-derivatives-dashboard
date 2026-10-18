@@ -12,6 +12,7 @@ Dashboard diário dos principais contratos de derivativos e indicadores do merca
 | Câmbio | Dólar futuro (DOL) + PTAX | B3 / BCB | 12m* / desde 2020 |
 | Ibovespa | Futuro (IND) + à vista (^BVSP) | B3 / Yahoo Finance | 12m* / desde 02/01/2020 |
 | Global | Bitcoin, S&P 500, Nasdaq Composite + evolução comparada (base 100) | Yahoo Finance | desde 02/01/2020 |
+| Risco & Retorno | Retornos, volatilidade, drawdown, Sharpe vs CDI, correlações, juro real, curva DI em prazos fixos, base do IND | derivado das demais fontes | conforme a fonte |
 | Commodities | Boi (BGI), milho (CCM), café (ICF), soja (SJC) | B3 | ~12 meses* |
 | Cupom cambial | DDI e FRC | B3 | ~12 meses* |
 | Petróleo | Brent Dated + WTI Spot, crack spreads (gasolina/diesel/jet fuel vs Brent) | EIA | desde 01/01/2020** |
@@ -72,6 +73,20 @@ O bitcoin negocia 7 dias por semana; B3, BCB, EIA e os índices do Yahoo (S&P 50
 - **Gráfico da aba Global**: mantém sábado e domingo de propósito — é dado real, e descartá-lo jogaria fora informação (ver `test_btc_tem_fim_de_semana_e_indices_nao` em `tests/test_markets.py`).
 - **Card de resumo**: fica ao lado de indicadores que só têm ponto em dia de pregão, então precisa da mesma referência de data. Sem tratamento, no fim de semana o card pegaria o último ponto da série (sábado ou domingo) — uma data que nenhum outro indicador do dashboard tem, e diferente do que a maioria mostra (o último pregão, sexta-feira). `card()` em `scripts/build_site.py` filtra para o último **dia útil** (`ultimo_dia_util()`) antes de pegar o mais recente, então o card do bitcoin sempre mostra "o último dia útil antes do sábado" quando é fim de semana — a mesma data que B3/S&P 500/Nasdaq/Ibovespa já mostram. Essa checagem é só de fim de semana (segunda a sexta = dia útil), não considera feriados de B3/NYSE — um feriado no meio da semana ainda pode gerar 1 dia de descompasso pontual, caso raro e aceito por ora.
 
+### Aba "Risco & Retorno"
+
+Calculada em `scripts/analytics.py` (funções puras, testadas em `tests/test_analytics.py` com dados reais do repositório conferidos por aritmética direta) e gravada em `docs/data/analytics.json` a cada execução de `build_site.py`. O front só apresenta — nenhum número é calculado no navegador.
+
+Conteúdo: retornos 1M/3M/6M/12M/no ano (Ibovespa, S&P 500, Nasdaq, Bitcoin e dólar, em R$ e em US$ pela PTAX), volatilidade anualizada, drawdown máximo e atual, Sharpe ex-post contra o CDI (só ativos em R$), excesso sobre o CDI, correlações (63 e 252 pregões), juro real ex-post em 12 meses, curva DI em prazos fixos (1/2/3/5/10a) com inclinação vs 12 meses atrás e base do IND sobre o Ibovespa à vista. A metodologia completa e seus limites estão no rodapé da própria aba.
+
+Convenções que importam para quem audita:
+
+- **Sem preenchimento.** Onde a história não cobre a janela, o campo é `n/d` — nunca extrapolado nem interpolado.
+- **Data de referência única** = último pregão da B3 (`as_of`). Cada ativo usa a sua última cotação até essa data e mostra a data própria quando difere (o bitcoin costuma estar 1 dia útil atrás).
+- **PTAX não é síncrona com NY**: a conversão cambial é aproximada. Retorno em R$ de ativo em US$ é sem hedge.
+- **Falha isolada.** Se `analytics.build` levantar exceção, a atualização diária segue; `summary.json` traz `analytics_status: {ok, erro}`, o `analytics.json` anterior é **removido** (para não exibir número velho como atual) e a aba mostra o erro.
+- **Selo de defasagem nos cards**: quando a data de um card é anterior ao último pregão da B3, o card mostra "⏱ N d.ú. de defasagem" (dias úteis seg–sex, sem feriados).
+
 ## Observações
 
 - Taxas do DI vêm diretamente do campo `AdjstdQtTax` da B3 (quando ausente, são implícitas do PU com dias úteis aproximados).
@@ -79,6 +94,6 @@ O bitcoin negocia 7 dias por semana; B3, BCB, EIA e os índices do Yahoo (S&P 50
 - `scripts/fetch_options.py` foi removido: era um coletor legado do antigo Sistema Pregão da BM&FBOVESPA (`www2.bmf.com.br`), fonte descontinuada e sem uso desde a migração para o arquivo público Up2Data da B3. Além de morto, escrevia em `data/opcoes.csv` com um esquema de colunas diferente do que `fetch_b3.py`/`build_site.py` esperam (`contratos_abertos` vs. `contratos_negociados`) — se alguém o rodasse por engano, corromperia silenciosamente os dados da aba Opções. Os dados de opções atuais vêm de `fetch_b3.py` (agregados do próprio arquivo Up2Data).
 - **FRC é cotado em taxa (% a.a.), não em PU.** O arquivo da B3 traz `AdjstdQt` vazio e o valor em `AdjstdQtTax` para esse contrato; a série era montada a partir do PU e por isso saía vazia, apesar dos 11.841 registros já coletados.
 - **Detecção de defasagem**: `summary.json` traz um bloco `frescor` com a data mais recente e o atraso em dias de cada fonte (B3, BCB, EIA, Yahoo, Bitcoin). O dashboard e o e-mail exibem um aviso quando alguma fonte passa do limite tolerado. Sem isso uma quebra na coleta passa batida — o dashboard continua publicando o último fechamento bom como se fosse o de hoje. O bitcoin é rastreado à parte dos outros ativos do Yahoo (`btc`, separado de `markets`): como ele negocia fim de semana e os demais (S&P 500, Nasdaq, Ibovespa à vista) não, usar só o S&P 500 como termômetro de frescor nunca acusaria um atraso específico do bitcoin — ver "Bitcoin: card de resumo vs. gráfico" acima.
-- **Ausência de arquivo ≠ falha de coleta.** A B3 às vezes responde HTTP 200 com uma página HTML (bloqueio/limite de taxa) em vez do CSV. Antes os dois casos eram tratados igual e o dia entrava na conta de "sem pregao", criando buracos silenciosos no histórico. Agora `fetch_b3` valida a assinatura do arquivo e separa `ArquivoIndisponivel` (definitivo) de `FalhaFonte` (retentável, reportado).
+- **Ausência de arquivo ≠ falha de coleta.** A B3 às vezes responde HTTP 200 com uma página HTML (bloqueio/limite de taxa) em vez do CSV. Antes os dois casos eram tratados igual e o dia entrava na conta de "sem pregão", criando buracos silenciosos no histórico. Agora `fetch_b3` valida a assinatura do arquivo e separa `ArquivoIndisponivel` (definitivo) de `FalhaFonte` (retentável, reportado).
 - Índices são em **pontos**, não retorno total: não incluem dividendos. Bitcoin negocia 7 dias por semana e os índices só em dias de pregão — as séries têm contagens de pontos diferentes de propósito.
 - Uso informativo. Não constitui recomendação de investimento.

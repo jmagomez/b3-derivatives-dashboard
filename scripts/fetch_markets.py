@@ -25,16 +25,22 @@ O Yahoo devolve a barra do dia corrente ainda em formacao (valor intradiario).
 Grava-la misturaria intradia com fechamento no mesmo grafico.
 
 O corte NAO pode ser um simples "data < hoje (UTC)", porque cada ativo fecha num
-horario diferente e a rotina diaria roda as 23:00 UTC (20h BRT):
+horario diferente. A rotina diaria roda as 00:00 UTC (21h BRT do dia anterior;
+ver daily.yml e README):
 
     ^GSPC / ^IXIC   NY fecha 16:00 ET = 20:00 UTC (verao) ou 21:00 UTC (inverno)
     ^BVSP           B3 fecha 18:00 BRT = 21:00 UTC (BRT e UTC-3 fixo desde 2019)
     BTC-USD         negocia 24/7: a barra diaria so fecha a 00:00 UTC do dia SEGUINTE
 
-As 23:00 UTC os indices do dia ja fecharam, mas a barra do bitcoin ainda tem uma
-hora pela frente. Com a regra ingenua, o fechamento do dia dos indices seria
-descartado a toa e as series ficariam um dia atrasadas. Por isso o corte e por
-ativo (FECHAMENTO_MIN_UTC).
+Uma execucao antes de 00:00 UTC (por exemplo as 23:00) pegaria os indices do dia
+ja fechados, mas o bitcoin ainda teria uma hora pela frente; com a regra ingenua
+o fechamento dos indices seria descartado a toa e as series ficariam um dia
+atrasadas. Por isso o corte e por ativo (FECHAMENTO_MIN_UTC), e continua correto
+se o horario do agendamento mudar.
+
+Mesmo as 00:00 UTC o Yahoo pode demorar a consolidar a barra do BTC: nesse caso a
+barra simplesmente ainda nao existe aqui e a publicacao do dashboard e adiada
+ate ela aparecer (scripts/publicacao.py) -- nunca se grava valor intradiario.
 """
 import datetime as dt
 import os

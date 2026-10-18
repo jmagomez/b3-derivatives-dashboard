@@ -1,11 +1,15 @@
 """Gera os JSONs consumidos pelo dashboard (docs/data/) a partir dos CSVs."""
 import json
 import os
+import sys
 import glob
 import datetime as dt
 
 import numpy as np
 import pandas as pd
+
+import analytics
+from fontes import FONTES, LIMITE_PADRAO
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 AJUSTES_DIR = os.path.join(ROOT, "data", "ajustes")
@@ -252,10 +256,31 @@ def card(code: str, label: str, unit: str, serie: list):
             "var_pct": var, "venc": None}
 
 
+def _gera_analytics(markets, bcb, payload_series, curva_info, as_of):
+    """Gera docs/data/analytics.json; devolve {"ok": bool, "erro": str|None}."""
+    path = os.path.join(OUT, "analytics.json")
+    try:
+        if not as_of:
+            raise ValueError("sem last_date da B3 para ancorar a data de referencia")
+        payload = analytics.build(
+            markets, bcb.get("ptax_venda", []), bcb.get("cdi", []), bcb.get("ipca", []),
+            payload_series.get("IND", {}).get("serie", []), curva_info, as_of)
+        with open(path, "w") as f:
+            json.dump(payload, f, ensure_ascii=False, allow_nan=False)
+        return {"ok": True, "erro": None}
+    except Exception as e:  # noqa: BLE001
+        print(f"[build_site] ERRO em analytics: {type(e).__name__}: {e}", file=sys.stderr)
+        if os.path.exists(path):
+            # JSON antigo seria exibido como atual: remove, a aba mostra o aviso
+            os.remove(path)
+        return {"ok": False, "erro": f"{type(e).__name__}: {e}"}
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     df = load_ajustes()
     payload_series = {}
+    curva_info = None
     summary = {"generated_at": dt.datetime.now().isoformat(timespec="seconds"), "items": []}
 
     if len(df):
@@ -285,9 +310,10 @@ def main():
         dates = sorted(df["date"].unique())
         old_ref = [d for d in dates if d <= (dt.date.fromisoformat(last_date) - dt.timedelta(days=365)).isoformat()]
         curve_old = di_curve(df, old_ref[-1]) if old_ref else []
+        curva_info = {"ref": last_date, "curve": curve,
+                      "ref_old": old_ref[-1] if old_ref else None, "curve_old": curve_old}
         with open(os.path.join(OUT, "di_curve.json"), "w") as f:
-            json.dump({"ref": last_date, "curve": curve,
-                       "ref_old": old_ref[-1] if old_ref else None, "curve_old": curve_old}, f)
+            json.dump(curva_info, f)
 
     with open(os.path.join(OUT, "series.json"), "w") as f:
         json.dump(payload_series, f)
@@ -344,11 +370,21 @@ def main():
     ]
     for nome, ultima in fontes:
         if ultima:
+            rotulo, limite = FONTES.get(nome, (nome, LIMITE_PADRAO))
             frescor[nome] = {
                 "last_date": str(ultima)[:10],
                 "dias": (hoje - dt.date.fromisoformat(str(ultima)[:10])).days,
+                "nome": rotulo,
+                "limite": limite,
             }
     summary["frescor"] = frescor
+
+    # Analise de risco/retorno (aba "Risco & Retorno"). Falha aqui NAO pode
+    # derrubar a atualizacao diaria: registra o erro no summary (o dashboard
+    # avisa) e REMOVE o analytics.json anterior em vez de deixar numero velho
+    # aparecendo como atual -- ver `analytics_status` no summary.json.
+    summary["analytics_status"] = _gera_analytics(markets, bcb, payload_series,
+                                                  curva_info, summary.get("last_date"))
     summary["generated_at_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
     with open(os.path.join(OUT, "summary.json"), "w") as f:
