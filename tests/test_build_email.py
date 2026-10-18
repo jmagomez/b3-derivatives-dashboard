@@ -84,3 +84,17 @@ def test_ordem_alfabetica_por_chave_da_fonte():
 
 def test_frescor_vazio_nao_gera_aviso():
     assert build_email.mensagens_atraso({}) == []
+
+
+def test_nome_e_limite_do_proprio_frescor_tem_precedencia():
+    """build_site grava nome/limite no summary.json; e-mail e dashboard so leem."""
+    frescor = {"b3": {"last_date": "2026-08-10", "dias": 6, "nome": "B3 (custom)", "limite": 5}}
+    assert build_email.mensagens_atraso(frescor) == ["B3 (custom) parado em 10/08/2026 (6 dias)"]
+    frescor["b3"]["limite"] = 6
+    assert build_email.mensagens_atraso(frescor) == []
+
+
+def test_fontes_py_e_a_unica_definicao_de_limites():
+    import fontes
+    assert set(fontes.FONTES) >= {"b3", "bcb", "eia", "markets", "btc"}
+    assert not hasattr(build_email, "LIMITES") and not hasattr(build_email, "NOMES")

@@ -2,6 +2,8 @@
 import json
 import os
 
+from fontes import FONTES, LIMITE_PADRAO
+
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SUMMARY = os.path.join(ROOT, "docs", "data", "summary.json")
 OUT = os.path.join(ROOT, "email_body.html")
@@ -10,15 +12,6 @@ PAGES_URL = os.environ.get("PAGES_URL", "")
 
 # Contratos cotados em taxa: a variacao vai em pontos percentuais, nao em %.
 EM_PONTOS_PERCENTUAIS = {"DI1", "FRC"}
-
-# Defasagem tolerada por fonte, em dias corridos.
-# "btc" e rastreado a parte de "markets" (SP500/Nasdaq/Ibovespa): o bitcoin
-# negocia fim de semana e pode ficar defasado mesmo com os indices em dia --
-# ver ultimo_dia_util()/card() em scripts/build_site.py.
-LIMITES = {"b3": 4, "bcb": 5, "eia": 12, "markets": 4, "btc": 4}
-NOMES = {"b3": "contratos da B3", "bcb": "indicadores do BCB",
-         "eia": "petroleo (EIA)", "markets": "S&P 500/Nasdaq/Ibovespa (Yahoo)",
-         "btc": "Bitcoin (Yahoo)"}
 
 
 def fmt(v):
@@ -36,22 +29,21 @@ def fmt_date(iso):
     return s
 
 
-def mensagens_atraso(frescor: dict, limites: dict = LIMITES, nomes: dict = NOMES) -> list:
-    """Monta as mensagens de aviso para fontes com atraso acima do limite tolerado.
+def mensagens_atraso(frescor: dict) -> list:
+    """Mensagens de aviso para fontes com atraso acima do limite tolerado.
 
-    Funcao pura, extraida de main() para ser testavel sem tocar em disco (ver
-    tests/test_build_email.py). Devolve uma lista de strings "<fonte> parado em
-    <data> (<n> dias)", uma por fonte defasada, na mesma ordem alfabetica das
-    chaves de `frescor`. Lista vazia = nada defasado, sem aviso no e-mail.
-
-    `dias` ausente/None (ex.: data mal formada) nao gera aviso -- e tratado como
-    "sem informacao de frescor", nao como "defasado".
+    Funcao pura (testavel sem disco). Nome e limite vem do proprio `frescor`
+    (gravado por build_site.py a partir de fontes.py); se faltarem, cai em
+    fontes.py. `dias` ausente/None nao gera aviso -- e "sem informacao", nao
+    "defasado". Ordem alfabetica pelas chaves.
     """
-    return [
-        f"{nomes.get(k, k)} parado em {fmt_date(v.get('last_date'))} ({v.get('dias')} dias)"
-        for k, v in sorted(frescor.items())
-        if v.get("dias") is not None and v["dias"] > limites.get(k, 7)
-    ]
+    msgs = []
+    for k, v in sorted(frescor.items()):
+        rotulo_pad, limite_pad = FONTES.get(k, (k, LIMITE_PADRAO))
+        limite = v.get("limite", limite_pad)
+        if v.get("dias") is not None and v["dias"] > limite:
+            msgs.append(f"{v.get('nome', rotulo_pad)} parado em {fmt_date(v.get('last_date'))} ({v['dias']} dias)")
+    return msgs
 
 
 def main():
