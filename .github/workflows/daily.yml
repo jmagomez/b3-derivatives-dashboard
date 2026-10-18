@@ -56,7 +56,7 @@ jobs:
 
       - name: Enviar e-mail
         if: env.MAIL_USERNAME != '' && steps.upd.outputs.novo == 'true'
-        uses: dawidd6/action-send-mail@v6
+        uses: dawidd6/action-send-mail@v22
         with:
           server_address: smtp.gmail.com
           server_port: 465
