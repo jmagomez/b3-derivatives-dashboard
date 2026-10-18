@@ -6,10 +6,16 @@ on:
     # as fontes do pregao anterior estao fechadas: NY e B3 ja encerraram e a
     # barra diaria do bitcoin acabou de fechar (00:00 UTC).
     - cron: "0 0 * * *"
+    # Retentativas: a publicacao espera o fechamento consolidado do bitcoin
+    # (scripts/publicacao.py). Se ele ainda nao estiver no Yahoo, o run grava
+    # data/ e adia docs/ + e-mail; estas execucoes completam depois. O e-mail so
+    # sai no primeiro sucesso de cada pregao (steps.upd.outputs.novo).
+    - cron: "0 3,6,9,12 * * *"
   workflow_dispatch:
 
+# Mesmo grupo do backfill.yml: nunca dois jobs commitando em data/ ao mesmo tempo.
 concurrency:
-  group: daily-update
+  group: atualizacao-dados
   cancel-in-progress: false
 
 permissions:
@@ -29,11 +35,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Atualizar dados e gerar site/e-mail
+      - name: Atualizar dados e (se o bitcoin fechou) gerar site/e-mail
+        id: upd
         run: python scripts/update.py
 
       - name: Commit dos dados atualizados
@@ -42,12 +50,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data docs
           git diff --cached --quiet || git commit -m "Atualizacao diaria $(date -u +%F)"
-          # Caso o backfill (ou um push manual) tenha mexido na main durante o job.
+          # Caso um push manual tenha mexido na main durante o job.
           git pull --rebase --autostash
           git push
 
       - name: Enviar e-mail
-        if: env.MAIL_USERNAME != ''
+        if: env.MAIL_USERNAME != '' && steps.upd.outputs.novo == 'true'
         uses: dawidd6/action-send-mail@v6
         with:
           server_address: smtp.gmail.com
