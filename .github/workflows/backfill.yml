@@ -10,6 +10,11 @@ on:
         description: "Data final (YYYY-MM-DD, vazio = hoje)"
         default: ""
 
+# Mesmo grupo do daily.yml: nunca dois jobs commitando em data/ ao mesmo tempo.
+concurrency:
+  group: atualizacao-dados
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -19,30 +24,23 @@ jobs:
     timeout-minutes: 350
     env:
       EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+      START: ${{ github.event.inputs.start }}
+      END: ${{ github.event.inputs.end }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Backfill ajustes B3
-        run: |
-          END="${{ github.event.inputs.end }}"
-          [ -z "$END" ] && END=$(date -u +%F)
-          python scripts/fetch_b3.py "${{ github.event.inputs.start }}" "$END"
-
-      - name: Backfill BCB + EIA + mercados + rebuild site
-        run: |
-          END="${{ github.event.inputs.end }}"
-          [ -z "$END" ] && END=$(date -u +%F)
-          python scripts/fetch_bcb.py
-          python scripts/fetch_eia.py "${{ github.event.inputs.start }}" "$END"
-          python scripts/fetch_markets.py "${{ github.event.inputs.start }}" "$END"
-          cd scripts && python build_site.py && python build_email.py
+      # Mesmo pipeline do daily (B3, BCB, EIA, Yahoo, site, e-mail), em modo backfill:
+      # --start desliga o gate do bitcoin e a janela de 10 dias.
+      - name: Backfill
+        run: python scripts/update.py --start "$START" ${END:+--end "$END"}
 
       - name: Commit
         run: |
