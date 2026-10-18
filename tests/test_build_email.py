@@ -78,7 +78,7 @@ def test_ordem_alfabetica_por_chave_da_fonte():
     msgs = build_email.mensagens_atraso(frescor)
     assert len(msgs) == 3
     assert "Bitcoin" in msgs[0]
-    assert "petroleo" in msgs[1]
+    assert "petr" in msgs[1]
     assert "S&P 500" in msgs[2]
 
 

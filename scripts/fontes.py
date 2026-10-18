@@ -11,7 +11,7 @@ Limite = dias corridos tolerados antes de acusar atraso.
 FONTES = {
     "b3": ("contratos da B3", 4),
     "bcb": ("indicadores do BCB", 5),
-    "eia": ("petroleo (EIA)", 12),
+    "eia": ("petróleo (EIA)", 12),
     "markets": ("S&P 500/Nasdaq/Ibovespa (Yahoo)", 4),
     "btc": ("Bitcoin (Yahoo)", 4),
 }
