@@ -1,0 +1,102 @@
+name: Deploy do dashboard (GitHub Pages)
+
+# Publica o frontend React/Vite (web/) no GitHub Pages.
+#
+# MIGRACAO: ate aqui o Pages era servido direto da pasta docs/ da branch main.
+# Isso nao sobrevive ao Vite -- o build gera bundles com hash no nome, e
+# commita-los encheria o historico de arquivos novos a cada deploy. A origem
+# do Pages passa a ser "GitHub Actions" (Settings -> Pages -> Source), e este
+# workflow e quem publica.
+#
+# Os JSON continuam vindo do pipeline Python, que commita docs/data/ as 20h
+# BRT. O build COPIA docs/data/ para dist/data/: o caminho `data/<arquivo>.json`
+# fica identico em dev (proxy do Vite) e em producao.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - web/**
+      - docs/data/**
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Um deploy por vez; cancelar o anterior em fila e seguro porque cada build
+# e completo (nao incremental).
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Guarda de sequenciamento: o workflow entra no repositorio junto com a
+    # fundacao (configs, tipos, schemas), mas o app React so e montado depois.
+    # Sem esta condicao o primeiro push de web/** dispararia um build sem
+    # index.html e deixaria a main vermelha sem nada de errado ter acontecido.
+    # A condicao se resolve sozinha quando web/index.html existir.
+    if: hashFiles('web/index.html') != ''
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instala dependencias
+        run: npm ci
+
+      # Os tres rodam ANTES do build e sao bloqueantes: um deploy verde com
+      # tipo quebrado ou teste vermelho e pior que um deploy que nao acontece,
+      # porque o site no ar passa a mentir sem ninguem perceber.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # Os dados sao produzidos pelo pipeline Python e versionados em docs/data/.
+      # O front nao os empacota (mudam todo dia util, o bundle nao); sao
+      # copiados como assets estaticos para o mesmo caminho relativo que o dev
+      # server serve.
+      - name: Copia os JSON do pipeline para o bundle
+        run: |
+          set -euo pipefail
+          mkdir -p dist/data
+          cp ../docs/data/*.json dist/data/
+          echo "Copiados: $(ls -1 dist/data | wc -l) arquivos"
+
+      # Confere o contrato ANTES de publicar: se o pipeline mudou um campo, a
+      # falha acontece aqui e o site no ar continua sendo o ultimo bom.
+      - name: Valida o contrato de dados
+        run: npm run validate:data
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
