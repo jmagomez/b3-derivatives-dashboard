@@ -155,6 +155,24 @@ const TABS = [
   ["opcoes","Opções"],["macro","Indicadores BCB"]
 ];
 const nf = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2});
+
+/* Variação diária na unidade que o payload declara (summary.items[].var_unit).
+   'bps' = contrato cotado em TAXA (DI1, FRC): a variação é a diferença entre
+   duas taxas, e diferença entre percentuais se mede em pontos-base — é o que a
+   mesa de juros lê. 'pct' = contrato cotado em PREÇO: variação relativa.
+   A classificação vive em scripts/unidades.py; aqui só se formata o que vem.
+   Não confundir com o "p.p." da tabela de excesso sobre o CDI, que é outra
+   coisa (retorno excedente aritmético) e continua em p.p. de propósito. */
+const nfBps = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:1});
+function fmtVar(v, unit){
+  if(v==null) return '—';
+  const seta = v>=0 ? '▲ +' : '▼ ';
+  if(unit==='bps'){
+    const rotulo = Math.abs(v)===1 ? 'bp' : 'bps';
+    return seta + nfBps.format(Math.abs(v)) + ' ' + rotulo;
+  }
+  return seta + nf.format(Math.abs(v)) + '%';
+}
 Chart.defaults.color = '#8b96ab';
 Chart.defaults.borderColor = 'rgba(139,150,171,.12)';
 Chart.defaults.font.family = "-apple-system,'Segoe UI',Inter,Arial,sans-serif";
@@ -367,9 +385,8 @@ async function main(){
   // cards
   const cards=document.getElementById('cards');
   (summary?.items||[]).forEach(it=>{
-    const isDI = it.code==='DI1' || it.code==='FRC';
-    const v = it.var_pct;
-    const vTxt = v==null?'—':(v>=0?'▲ +':'▼ ')+nf.format(Math.abs(v))+(isDI?' p.p.':'%');
+    const v = it.variation;
+    const vTxt = fmtVar(v, it.var_unit);
     const trend = v==null?'':(v>=0?'up':'dn');
     // Selo quando a cotação do card é mais antiga que o último pregão da B3: o dashboard
     // mistura fontes que publicam em ritmos diferentes (bitcoin/Yahoo, petróleo/EIA).
