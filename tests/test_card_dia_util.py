@@ -42,7 +42,9 @@ def test_card_bitcoin_usa_ultimo_dia_util_nao_sabado():
     assert it["value"] == 78335.1875
     # variacao deve ser sexta vs quinta (dias uteis), nao sexta vs sabado
     assert it["prev"] == 73032.7578125
-    assert it["var_pct"] == 7.26  # confere com o var_pct real do summary.json em 23/08/2026
+    # BTC e cotado em preco: variacao relativa, em %. Confere com o summary.json de 23/08/2026.
+    assert it["variation"] == 7.26
+    assert it["var_unit"] == "pct"
 
 
 def test_card_sem_pontos_uteis_devolve_none():

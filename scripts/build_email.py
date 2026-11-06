@@ -3,15 +3,13 @@ import json
 import os
 
 from fontes import FONTES, LIMITE_PADRAO
+from unidades import PCT, formata
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SUMMARY = os.path.join(ROOT, "docs", "data", "summary.json")
 OUT = os.path.join(ROOT, "email_body.html")
 
 PAGES_URL = os.environ.get("PAGES_URL", "")
-
-# Contratos cotados em taxa: a variacao vai em pontos percentuais, nao em %.
-EM_PONTOS_PERCENTUAIS = {"DI1", "FRC"}
 
 
 def fmt(v):
@@ -52,10 +50,11 @@ def main():
     last = s.get("last_date", "-")
     rows = []
     for it in s.get("items", []):
-        var = it.get("var_pct")
+        var = it.get("variation")
         color = "#666" if var is None else ("#0a7a2f" if var >= 0 else "#c0392b")
-        suffix = " p.p." if it["code"] in EM_PONTOS_PERCENTUAIS else "%"
-        var_txt = "-" if var is None else f"{var:+.2f}{suffix}".replace(".", ",")
+        # A unidade vem do proprio payload (build_site.py -> unidades.py). O
+        # e-mail nao sabe quais contratos sao cotados em taxa, e nao precisa.
+        var_txt = formata(var, it.get("var_unit", PCT))
         rows.append(
             f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>{it['label']}"
             f" <span style='color:#999;font-size:12px'>({it.get('venc') or ''})</span></td>"

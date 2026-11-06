@@ -10,6 +10,7 @@ import pandas as pd
 
 import analytics
 from fontes import FONTES, LIMITE_PADRAO
+from unidades import unidade_variacao, variacao
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 AJUSTES_DIR = os.path.join(ROOT, "data", "ajustes")
@@ -56,8 +57,11 @@ UNITS = {
     "IBOV": "pontos",
 }
 
-# Contratos cotados em taxa (% a.a.) em vez de preco de ajuste (PU).
-COTADOS_EM_TAXA = {"FRC"}
+# De qual coluna do CSV sai o valor da serie. Nao confundir com a classificacao
+# taxa x preco de unidades.py: DI1 tambem e cotado em taxa, mas nao entra aqui
+# porque tem funcao propria (di_front_rate_series), que escolhe o vencimento de
+# ~1 ano em vez do primeiro. A unidade da VARIACAO vem de unidades.py.
+VALOR_NA_COLUNA_TAXA = {"FRC"}
 
 # Coluna de markets.csv -> (codigo do card, rotulo)
 MARKETS = {
@@ -86,12 +90,12 @@ def load_ajustes() -> pd.DataFrame:
 
 
 def front_month_series(df: pd.DataFrame, code: str) -> list:
-    """Serie do 1o vencimento. Usa `taxa` para contratos cotados em taxa (FRC)
-    e `ajuste_atual` (PU) para os demais."""
+    """Serie do 1o vencimento. Usa `taxa` para FRC e `ajuste_atual` (PU) para os
+    demais -- ver VALOR_NA_COLUNA_TAXA."""
     sub = df[df["codigo"] == code].copy()
     if sub.empty:
         return []
-    col = "taxa" if code in COTADOS_EM_TAXA else "ajuste_atual"
+    col = "taxa" if code in VALOR_NA_COLUNA_TAXA else "ajuste_atual"
     sub = sub[sub["mat"] >= sub["date_d"].map(lambda d: dt.date(d.year, d.month, 1))]
     sub = sub.dropna(subset=[col])
     if sub.empty:
@@ -248,12 +252,10 @@ def card(code: str, label: str, unit: str, serie: list):
         return None
     cur = uteis[-1]
     prev = uteis[-2] if len(uteis) >= 2 else None
-    var = None
-    if prev and prev["value"]:
-        var = round((cur["value"] / prev["value"] - 1) * 100, 2)
+    var = variacao(code, cur["value"], prev["value"]) if prev else None
     return {"code": code, "label": label, "unit": unit, "date": cur["date"],
             "value": cur["value"], "prev": prev["value"] if prev else None,
-            "var_pct": var, "venc": None}
+            "variation": var, "var_unit": unidade_variacao(code), "venc": None}
 
 
 def _gera_analytics(markets, bcb, payload_series, curva_info, as_of):
@@ -295,14 +297,11 @@ def main():
             payload_series[code] = {"label": label, "unit": unit, "serie": serie}
             if len(serie) >= 2:
                 cur, prev = serie[-1], serie[-2]
-                var = None
-                if code == "DI1" or code in COTADOS_EM_TAXA:
-                    var = round(cur["value"] - prev["value"], 3)  # p.p.
-                elif prev["value"]:
-                    var = round((cur["value"] / prev["value"] - 1) * 100, 2)
                 summary["items"].append({
                     "code": code, "label": label, "unit": unit, "date": cur["date"],
-                    "value": cur["value"], "prev": prev["value"], "var_pct": var,
+                    "value": cur["value"], "prev": prev["value"],
+                    "variation": variacao(code, cur["value"], prev["value"]),
+                    "var_unit": unidade_variacao(code),
                     "venc": cur.get("venc"),
                 })
         curve = di_curve(df, last_date)
