@@ -25,3 +25,31 @@ email_body.html
 Thumbs.db
 .idea/
 .vscode/
+
+# ---------------------------------------------------------------------------
+# Node / React (web/)
+# ---------------------------------------------------------------------------
+node_modules/
+web/dist/
+web/dist-ssr/
+.vite/
+*.local
+
+# Logs de gerenciador de pacotes
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Caches de ferramenta
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+coverage/
+.nyc_output/
+web/test-results/
+web/playwright-report/
+
+# package-lock.json NAO entra aqui: `npm ci` depende dele, e o deploy usa
+# `npm ci` justamente para que o build seja reproduzivel.

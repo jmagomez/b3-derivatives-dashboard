@@ -93,6 +93,10 @@ def test_taxa_zero_no_anterior_ainda_calcula():
     (1.0, u.BPS, "+1 bp"),      # singular, e sem decimal inutil
     (-1.0, u.BPS, "-1 bp"),
     (12.0, u.BPS, "+12 bps"),
+    # Separador de milhar: sem ele o Python divergia do Intl.NumberFormat
+    # ('pt-BR') do front. Pego por teste de paridade, nao por inspecao.
+    (1234.5, u.BPS, "+1.234,5 bps"),
+    (-12345.67, u.PCT, "-12.345,67%"),
     (0.54, u.PCT, "+0,54%"),
     (-5.55, u.PCT, "-5,55%"),
     (None, u.PCT, "—"),
