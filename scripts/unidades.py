@@ -39,6 +39,12 @@ novo cotado em taxa entra aqui, num lugar so.
 
 Mesmo espirito de fontes.py, que nasceu para matar uma divergencia de duas
 copias entre build_email.py e docs/index.html.
+
+PARIDADE COM O FRONTEND
+
+`formata()` tem um porte fiel em web/src/lib/variation.ts. As duas produzem a
+MESMA string para o mesmo par (valor, unidade), porque o numero aparece no
+e-mail (daqui) e no dashboard (de la). Ha teste de paridade cobrindo isso.
 """
 
 # Contratos cujo ajuste e uma taxa anualizada (% a.a.), e nao um preco.
@@ -72,18 +78,32 @@ def variacao(code: str, atual, anterior):
     return round((atual / anterior - 1) * 100.0, 2)
 
 
+def _pt_br(valor, casas: int, sinal: bool) -> str:
+    """Numero no padrao pt-BR: ponto no milhar, virgula no decimal.
+
+    Mesmo truque de troca que `build_email.fmt()` usa ha tempos -- mantido
+    identico de proposito, para que os dois lugares formatem o mesmo numero do
+    mesmo jeito.
+    """
+    fmt = f"{{:{'+' if sinal else ''},.{casas}f}}"
+    return fmt.format(valor).replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def formata(valor, unidade: str, *, sinal: bool = True) -> str:
     """Formata a variacao em pt-BR. Ex.: "-11,6 bps", "+1 bp", "+0,54%".
 
     Em bps o decimal so aparece quando existe: "+1 bp" em vez de "+1,0 bp".
     O singular "bp" vale so para exatamente 1 ponto-base.
+
+    O separador de milhar importa: uma variacao de 1234,5 bps (evento extremo
+    ou buraco de backfill) sai "+1.234,5 bps". Sem ele o numero divergia do que
+    o front exibe via Intl.NumberFormat('pt-BR') -- divergencia encontrada por
+    teste de paridade entre as duas implementacoes, nao por inspecao.
     """
     if valor is None:
         return "—"
-    s = f"{valor:+.2f}" if sinal else f"{valor:.2f}"
     if unidade == BPS:
         casas = 0 if float(valor) == int(valor) else 1
-        s = f"{valor:+.{casas}f}" if sinal else f"{valor:.{casas}f}"
         rotulo = "bp" if abs(valor) == 1 else "bps"
-        return f"{s} {rotulo}".replace(".", ",")
-    return f"{s}%".replace(".", ",")
+        return f"{_pt_br(valor, casas, sinal)} {rotulo}"
+    return f"{_pt_br(valor, 2, sinal)}%"
