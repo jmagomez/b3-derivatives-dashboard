@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Derivativos B3 — Dashboard Diário</title>
+    <meta
+      name="description"
+      content="Fechamento diário dos principais contratos futuros da B3, índices globais e bitcoin, com retorno, volatilidade e correlação."
+    />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <script>
+      // Bloqueante de propósito: roda ANTES do primeiro paint para evitar o
+      // flash de tema claro em quem escolheu escuro. É o único script inline
+      // do projeto, e existe porque o React só decide o tema depois de hidratar.
+      (function () {
+        try {
+          var salvo = localStorage.getItem('tema');
+          var escuro = salvo
+            ? salvo === 'dark'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', escuro);
+        } catch (e) {
+          /* localStorage bloqueado: fica no padrão do HTML */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

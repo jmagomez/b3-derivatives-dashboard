@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Tokens em HSL sem a função hsl(): o Tailwind compõe `hsl(var(--x) / alpha)`,
+ * o que permite opacidade em qualquer cor do tema.
+ *
+ * Os pares up/down foram escolhidos com contraste AA sobre a superfície de
+ * CADA tema -- o verde que funciona no claro fica ilegível no escuro, e é por
+ * isso que não há um valor só.
+ */
+@layer base {
+  :root {
+    --bg: 210 20% 98%;
+    --surface: 0 0% 100%;
+    --border: 214 20% 88%;
+    --fg: 222 30% 14%;
+    --muted: 215 16% 42%;
+    --accent: 217 85% 45%;
+    --up: 146 72% 26%;
+    --down: 352 72% 42%;
+    --warn: 32 85% 38%;
+  }
+
+  .dark {
+    --bg: 222 28% 8%;
+    --surface: 222 24% 12%;
+    --border: 220 18% 22%;
+    --fg: 210 30% 94%;
+    --muted: 215 16% 62%;
+    --accent: 213 90% 66%;
+    --up: 150 60% 52%;
+    --down: 352 80% 68%;
+    --warn: 38 90% 62%;
+  }
+
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-bg text-fg;
+    font-feature-settings: 'cv02', 'cv03', 'cv04';
+  }
+
+  /* Foco visível em tudo que recebe teclado. O default do browser some em
+     fundo escuro; sem isto a navegação por Tab fica cega. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-bg;
+  }
+
+  /* Respeita quem pediu menos movimento no sistema operacional. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Visível só para leitor de tela -- usado nas tabelas equivalentes dos
+     gráficos e no link "pular para o conteúdo". */
+  .sr-only-focusable:not(:focus):not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
