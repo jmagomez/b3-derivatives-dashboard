@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "useDefineForClassFields": true,
+    "types": ["vite/client", "node", "vitest/globals"],
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -15,7 +16,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
 
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
@@ -25,6 +25,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "tests", "scripts", "vite.config.ts", "tailwind.config.ts"]
 }

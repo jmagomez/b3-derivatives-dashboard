@@ -39,13 +39,15 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       output: {
         /**
-         * Recharts + React sao a maior parte do bundle e mudam muito menos que
-         * o codigo do dashboard. Separa-los deixa o cache do navegador valer
-         * entre deploys: uma mudanca de texto nao invalida 150 KB de lib.
+         * React muda muito menos que o codigo do dashboard; separa-lo deixa o
+         * cache do navegador valer entre deploys -- uma mudanca de texto nao
+         * invalida 140 KB de lib.
+         *
+         * Recharts entra aqui quando os graficos chegarem: hoje a entrada
+         * produziria um chunk de ~450 bytes e um modulepreload inutil no HTML.
          */
         manualChunks: {
           react: ['react', 'react-dom'],
-          charts: ['recharts'],
         },
       },
     },
