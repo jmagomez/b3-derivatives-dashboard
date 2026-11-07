@@ -59,6 +59,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Formatacao (prettier)
+        run: npm run format:check
+
       - name: Testes
         run: npm run test
 
