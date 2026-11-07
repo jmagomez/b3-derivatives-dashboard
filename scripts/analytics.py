@@ -180,13 +180,37 @@ def cdi_entre(cdi: pd.Series, base, ref):
 
 
 def sharpe_ex_post(s: pd.Series, cdi: pd.Series, as_of, n: int = DIAS_UTEIS_ANO):
-    """Sharpe ex-post: media dos excessos diarios sobre o CDI / desvio dos
-    excessos, anualizado. So faz sentido para ativos em R$.
+    """Sharpe ex-post e o proprio numerador dele, anualizado.
+
+    Sharpe = media dos excessos diarios sobre o CDI / desvio dos excessos,
+    anualizado. So faz sentido para ativos em R$.
 
     Excesso de cada intervalo = retorno do ativo - CDI acumulado no mesmo
     intervalo (taxas datadas em (d_anterior, d]). Se o CDI ainda nao cobre os
     ultimos dias do ativo (publicacao defasada), a janela termina no ultimo dia
     coberto; se sobrar menos de n retornos, devolve None -- nao assume CDI zero.
+
+    POR QUE DEVOLVE TAMBEM `excesso_arit_pct`
+
+    O numerador do Sharpe e a media ARITMETICA dos excessos diarios. O campo
+    `excesso_cdi` das linhas e outra coisa: a diferenca entre os retornos
+    COMPOSTOS do ativo e do CDI na janela. Os dois podem ter SINAIS OPOSTOS, e
+    isso nao e erro de nenhum dos dois -- e arrasto de volatilidade.
+
+    Medido no Ibovespa em 06/11/2026, janela de 12 meses:
+
+        retorno do ativo ........................  +9,89%
+        CDI .....................................  +14,17%
+        excesso composto (o que a tabela mostra)   -4,28 p.p.
+        media aritmetica dos excessos diarios ...  +0,57% a.a.  <- numerador
+        desvio dos excessos .....................  24,13%
+        Sharpe ..................................  +0,02
+        -sigma^2/2 ..............................  -2,91 p.p.   <- a diferenca
+
+    Exibir "-4,28 p.p." ao lado de "Sharpe +0,02" sem mostrar o numerador faz
+    o leitor concluir que um dos dois esta errado. Devolvendo a media
+    aritmetica, o dashboard mostra de onde o Sharpe saiu e avisa quando os
+    sinais divergem.
     """
     s = ate(s, as_of)
     if cdi.empty:
@@ -208,7 +232,13 @@ def sharpe_ex_post(s: pd.Series, cdi: pd.Series, as_of, n: int = DIAS_UTEIS_ANO)
     sd = exc.std(ddof=1)
     if sd == 0:
         return None
-    return float(exc.mean() / sd * math.sqrt(DIAS_UTEIS_ANO))
+    return {
+        "sharpe": float(exc.mean() / sd * math.sqrt(DIAS_UTEIS_ANO)),
+        # Em % a.a., na mesma unidade de `excesso_cdi`, para serem comparaveis
+        # lado a lado na tela.
+        "excesso_arit_pct": float(exc.mean() * DIAS_UTEIS_ANO * 100),
+        "vol_excesso_pct": float(sd * math.sqrt(DIAS_UTEIS_ANO) * 100),
+    }
 
 
 # ---------------------------------------------------------------- correlacao
@@ -376,7 +406,7 @@ def linha(codigo, rotulo, moeda, s, cdi, as_of):
     vol = {n: _arred(vol_anualizada(s, as_of, k)) for n, k in JANELAS_VOL.items()}
     dd = drawdown_janela(s, as_of, 12)
     ate_s = ate(s, as_of)
-    sharpe = sharpe_ex_post(s, cdi, as_of) if codigo in EM_REAIS else None
+    sh = sharpe_ex_post(s, cdi, as_of) if codigo in EM_REAIS else None
     ext = extremos(s, as_of)
     return {
         "codigo": codigo, "rotulo": rotulo, "moeda": moeda,
@@ -384,7 +414,11 @@ def linha(codigo, rotulo, moeda, s, cdi, as_of):
         "ret": ret, "vol": vol,
         "dd12m": None if dd is None else {
             "max": _arred(dd["max_pct"]), "vale": _iso(dd["vale"]), "atual": _arred(dd["atual_pct"])},
-        "sharpe_12m": _arred(sharpe),
+        "sharpe_12m": None if sh is None else _arred(sh["sharpe"]),
+        # Numerador do Sharpe, em % a.a.: sem ele a tela mostraria um Sharpe
+        # positivo ao lado de um excesso composto negativo sem explicar como.
+        "excesso_arit_12m": None if sh is None else _arred(sh["excesso_arit_pct"]),
+        "vol_excesso_12m": None if sh is None else _arred(sh["vol_excesso_pct"]),
         "extremos_12m": None if ext is None else {
             k: {"pct": _arred(v["pct"]), "data": _iso(v["data"])} for k, v in ext.items()},
     }
