@@ -160,7 +160,7 @@ def test_sharpe_excesso_constante_tem_desvio_zero_e_devolve_none():
     ativo = pd.Series(100.0 * (1.001 ** np.arange(6)), index=idx)
     # retorno e CDI constantes => excesso constante => sd ~ 0 (pode haver ruido de ponto flutuante)
     v = A.sharpe_ex_post(ativo, cdi, idx[-1], n=5)
-    assert v is None or abs(v) > 1e3  # ou None, ou razao explodindo: nunca um numero "razoavel"
+    assert v is None or abs(v["sharpe"]) > 1e3  # ou None, ou razao explodindo
 
 
 def test_sharpe_confere_com_calculo_independente():
@@ -170,7 +170,11 @@ def test_sharpe_confere_com_calculo_independente():
     ativo = pd.Series(precos, index=idx)
     exc = np.array([precos[i] / precos[i - 1] - 1 - 0.0004 for i in range(1, 7)])
     esperado = exc.mean() / exc.std(ddof=1) * math.sqrt(252)
-    assert A.sharpe_ex_post(ativo, cdi, idx[-1], n=6) == pytest.approx(esperado)
+    v = A.sharpe_ex_post(ativo, cdi, idx[-1], n=6)
+    assert v["sharpe"] == pytest.approx(esperado)
+    # O numerador vai junto, na mesma unidade de `excesso_cdi` (% a.a.).
+    assert v["excesso_arit_pct"] == pytest.approx(exc.mean() * 252 * 100)
+    assert v["vol_excesso_pct"] == pytest.approx(exc.std(ddof=1) * math.sqrt(252) * 100)
 
 
 def test_sharpe_nao_assume_cdi_zero_quando_cdi_esta_atrasado():
@@ -352,3 +356,27 @@ def test_entradas_vazias_ou_parciais_nao_derrubam_o_build():
                                 {"date": "2026-10-15", "value": 2.0}]},
                       [], [], [], [], None, "2026-10-15")
     json.dumps(parcial, allow_nan=False)
+
+
+def test_sharpe_e_excesso_composto_podem_ter_sinais_OPOSTOS():
+    """Nao e erro: e arrasto de volatilidade, e a tela precisa poder explicar.
+
+    Caso real reproduzido em escala -- um ativo que oscila muito termina a
+    janela ABAIXO do CDI em termos compostos, enquanto a media aritmetica dos
+    excessos diarios fica POSITIVA. A diferenca tende a -sigma^2/2.
+
+    O Ibovespa em 06/11/2026 e exatamente isso: excesso composto de -4,28 p.p.
+    e Sharpe de +0,02, com desvio dos excessos de 24,13%.
+    """
+    idx = pd.bdate_range("2026-01-05", periods=5)
+    # +50%, -40%, +50%, -40%: media aritmetica +5%/dia, composto negativo
+    precos = pd.Series([100.0, 150.0, 90.0, 135.0, 81.0], index=idx)
+    cdi = pd.Series(0.0, index=idx)
+    v = A.sharpe_ex_post(precos, cdi, idx[-1], n=4)
+
+    composto = precos.iloc[-1] / precos.iloc[0] - 1
+    assert composto < 0, "o ativo termina abaixo de onde comecou"
+    assert v["excesso_arit_pct"] > 0, "a media aritmetica dos excessos e positiva"
+    assert v["sharpe"] > 0, "logo o Sharpe tambem e positivo"
+    # os dois numeros sao corretos e discordam no sinal -- e por isso que o
+    # payload carrega o numerador, para o dashboard mostrar de onde ele saiu
