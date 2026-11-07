@@ -77,7 +77,7 @@ function Cabecalho() {
           Derivativos B3 — Dashboard Diário
         </h1>
         <p className="mt-1 text-sm text-muted">
-          {data ? `Último pregdão: ${fmtData(data.last_date)}` : 'Carregando o último fechamento…'}
+          {data ? `Último pregão: ${fmtData(data.last_date)}` : 'Carregando o último fechamento…'}
         </p>
       </div>
       <ThemeToggle />
@@ -98,7 +98,7 @@ function Rodape() {
       <p className="mt-2">
         <b>Fontes assíncronas.</b> B3, BCB, EIA e Yahoo publicam em ritmos diferentes. Cada card
         mostra a data da própria série e compara com o dia útil anterior dela, não com o último
-        pregdão da B3.
+        pregão da B3.
       </p>
       <p className="mt-2">
         <b>Gráficos.</b> Cada um tem tabela equivalente sob o botão “Ver dados em tabela” — mesma
