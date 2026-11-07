@@ -31,10 +31,7 @@ export async function buscaJson(arquivo: string): Promise<unknown> {
   try {
     const resposta = await fetch(url, { signal: controller.signal });
     if (!resposta.ok) {
-      throw new ErroDeDados(
-        `${arquivo}: servidor respondeu ${resposta.status}`,
-        arquivo,
-      );
+      throw new ErroDeDados(`${arquivo}: servidor respondeu ${resposta.status}`, arquivo);
     }
     return (await resposta.json()) as unknown;
   } catch (erro) {
