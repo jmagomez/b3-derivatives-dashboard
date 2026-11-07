@@ -19,3 +19,14 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// Recharts mede o container pelo ResizeObserver, que o jsdom nao implementa.
+// Sem este stub qualquer teste que monte um grafico estoura em
+// "ResizeObserver is not defined" -- mesmo caso do matchMedia acima.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(window, 'ResizeObserver', { writable: true, value: ResizeObserverStub });
+globalThis.ResizeObserver = ResizeObserverStub;

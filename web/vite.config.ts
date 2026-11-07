@@ -42,10 +42,11 @@ export default defineConfig(({ command }) => ({
          * React muda muito menos que o codigo do dashboard; separa-lo deixa o
          * cache do navegador valer entre deploys -- uma mudanca de texto nao
          * invalida 140 KB de lib.
-         *
-         * Recharts entra aqui quando os graficos chegarem: hoje a entrada
-         * produziria um chunk de ~450 bytes e um modulepreload inutil no HTML.
          */
+        // Recharts NAO entra aqui: ele chega por import() dinamico nos
+        // paineis de grafico, e o Rollup ja o isola num chunk assincrono.
+        // Forca-lo para um chunk nomeado o traria de volta ao grafo de
+        // entrada e desfaria o lazy (48,6 KB gzip de entrada viram 159 KB).
         manualChunks: {
           react: ['react', 'react-dom'],
         },

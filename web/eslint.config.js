@@ -35,13 +35,21 @@ export default tseslint.config(
       // services -> hooks -> components. Um componente que importa de
       // services pula a camada de cache e de validacao, e reintroduz fetch
       // na UI -- ver CLAUDE.md, invariante 7.
-      'no-restricted-imports': [
+      //
+      // Versao TS-aware, com allowTypeImports: `import type` e apagado na
+      // compilacao e nao cria dependencia de runtime. Foi a propria regra que
+      // pegou o guard de divergencia em src/types/dashboard.ts, que importa
+      // os schemas SO como tipo -- proibir aquilo seria a regra atrapalhando
+      // o que ela existe para proteger.
+      'no-restricted-imports': 'off',
+      '@typescript-eslint/no-restricted-imports': [
         'error',
         {
           patterns: [
             {
               group: ['@/services/*', '**/services/*'],
               message: 'Componente nao fala com services. Use um hook (src/hooks/).',
+              allowTypeImports: true,
             },
           ],
         },
@@ -52,12 +60,12 @@ export default tseslint.config(
   {
     // Hooks e services SAO as camadas autorizadas a falar com services.
     files: ['src/hooks/**/*.ts', 'src/services/**/*.ts', 'scripts/**/*.ts'],
-    rules: { 'no-restricted-imports': 'off' },
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
   },
 
   {
     files: ['tests/**/*.{ts,tsx}'],
-    rules: { 'no-restricted-imports': 'off' },
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
   },
 
   {

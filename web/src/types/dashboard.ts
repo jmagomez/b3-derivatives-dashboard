@@ -42,9 +42,9 @@ export interface Quote {
 export interface SeriePonto {
   date: string;
   value: number;
-  venc?: string;
-  contratos?: number;
-  volume?: number;
+  venc?: string | undefined;
+  contratos?: number | undefined;
+  volume?: number | undefined;
 }
 
 export interface Serie {
@@ -63,7 +63,7 @@ export interface Frescor {
 
 export interface Summary {
   generated_at: string;
-  generated_at_utc?: string;
+  generated_at_utc?: string | undefined;
   /** Ultimo pregao da B3 -- a ancora temporal do dashboard. */
   last_date: string;
   items: Quote[];
@@ -88,3 +88,31 @@ export interface CurvaDI {
   ref_old: string | null;
   curve_old: PontoCurva[];
 }
+
+/* --------------------------------------------------------------------------
+   Guard de divergencia, em tempo de COMPILACAO.
+
+   As interfaces acima existem para serem lidas: carregam a documentacao do
+   contrato. Os schemas Zod existem para validar. Nada impedia os dois de
+   divergirem em silencio -- e divergencia entre duas descricoes da mesma
+   coisa e o defeito que este repositorio passou a semana corrigindo.
+
+   As linhas abaixo nao geram codigo. Se schema e interface deixarem de
+   descrever a mesma forma, `tsc` falha e nomeia o campo.
+
+   `import type`: nenhuma dependencia de runtime, e por isso a regra de
+   arquitetura do ESLint (allowTypeImports) permite o import de services aqui.
+   -------------------------------------------------------------------------- */
+import type { z } from 'zod';
+import type {
+  summarySchema,
+  serieSchema,
+  curvaDISchema,
+} from '@/services/schemas/dashboard.schema';
+
+type Exatamente<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Afirma<T extends true> = T;
+
+export type _SummaryBate = Afirma<Exatamente<z.infer<typeof summarySchema>, Summary>>;
+export type _SerieBate = Afirma<Exatamente<z.infer<typeof serieSchema>, Serie>>;
+export type _CurvaBate = Afirma<Exatamente<z.infer<typeof curvaDISchema>, CurvaDI>>;

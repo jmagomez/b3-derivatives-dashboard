@@ -9,6 +9,11 @@
  * Os pares up/down foram escolhidos com contraste AA sobre a superfície de
  * CADA tema -- o verde que funciona no claro fica ilegível no escuro, e é por
  * isso que não há um valor só.
+ *
+ * ARMADILHA AO CONFERIR: medir getComputedStyle logo após trocar a classe do
+ * tema devolve cor INTERPOLADA, porque os cards têm `transition-colors` de
+ * 180 ms. Medido assim, o tema claro parece reprovar em tudo. Espere a
+ * transição terminar antes de ler a cor.
  */
 @layer base {
   :root {
@@ -20,7 +25,9 @@
     --accent: 217 85% 45%;
     --up: 146 72% 26%;
     --down: 352 72% 42%;
-    --warn: 32 85% 38%;
+    /* L 38 dava 4,33:1 sobre a superfície clara -- reprova AA por pouco.
+       37 leva a 4,54. Medido, não estimado. */
+    --warn: 32 85% 37%;
   }
 
   .dark {
