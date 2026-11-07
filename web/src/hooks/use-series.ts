@@ -23,3 +23,55 @@ export function useCurvaDI() {
     gcTime: 60 * 60 * 1000,
   });
 }
+
+/**
+ * Os demais payloads. Cada um num hook proprio e com a mesma politica de
+ * cache: o dado muda uma vez por dia util, as 20h BRT.
+ *
+ * markets (330 KB), eia (340 KB) e bcb (220 KB) so sao buscados quando a aba
+ * que os usa e aberta -- os paineis que os consomem entram por lazy().
+ */
+export function useMarkets() {
+  return useQuery({
+    queryKey: ['markets'],
+    queryFn: dashboardApi.markets,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+}
+
+export function useEia() {
+  return useQuery({
+    queryKey: ['eia'],
+    queryFn: dashboardApi.eia,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+}
+
+export function useBcb() {
+  return useQuery({
+    queryKey: ['bcb'],
+    queryFn: dashboardApi.bcb,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+}
+
+export function useOpcoes() {
+  return useQuery({
+    queryKey: ['opcoes'],
+    queryFn: dashboardApi.opcoes,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+}
+
+export function useAnalytics() {
+  return useQuery({
+    queryKey: ['analytics'],
+    queryFn: dashboardApi.analytics,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+}
