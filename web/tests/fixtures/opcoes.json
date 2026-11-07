@@ -1,0 +1,114 @@
+[
+  {
+    "date": "2026-10-30",
+    "mercadoria": "SJC",
+    "contratos_negociados": 10.0,
+    "volume": 20861.54,
+    "negocios": 2.0
+  },
+  {
+    "date": "2026-10-30",
+    "mercadoria": "ICF",
+    "contratos_negociados": 0.0,
+    "volume": 0.0,
+    "negocios": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "mercadoria": "BGI",
+    "contratos_negociados": 13305.0,
+    "volume": 11309278.2,
+    "negocios": 41.0
+  },
+  {
+    "date": "2026-10-30",
+    "mercadoria": "IDI",
+    "contratos_negociados": 23038.0,
+    "volume": 2420814.02,
+    "negocios": 80.0
+  },
+  {
+    "date": "2026-10-30",
+    "mercadoria": "CCM",
+    "contratos_negociados": 1858.0,
+    "volume": 2142459.0,
+    "negocios": 14.0
+  },
+  {
+    "date": "2026-11-05",
+    "mercadoria": "ICF",
+    "contratos_negociados": 20.0,
+    "volume": 220775.27,
+    "negocios": 2.0
+  },
+  {
+    "date": "2026-11-05",
+    "mercadoria": "BGI",
+    "contratos_negociados": 287.0,
+    "volume": 1019815.5,
+    "negocios": 14.0
+  },
+  {
+    "date": "2026-11-05",
+    "mercadoria": "CCM",
+    "contratos_negociados": 706.0,
+    "volume": 943551.0,
+    "negocios": 12.0
+  },
+  {
+    "date": "2026-11-05",
+    "mercadoria": "DOL",
+    "contratos_negociados": 7610.0,
+    "volume": 36600176.0,
+    "negocios": 9.0
+  },
+  {
+    "date": "2026-11-05",
+    "mercadoria": "SJC",
+    "contratos_negociados": 5.0,
+    "volume": 32803.63,
+    "negocios": 3.0
+  },
+  {
+    "date": "2026-11-06",
+    "mercadoria": "IDI",
+    "contratos_negociados": 42917.0,
+    "volume": 2452207.06,
+    "negocios": 16.0
+  },
+  {
+    "date": "2026-11-06",
+    "mercadoria": "BGI",
+    "contratos_negociados": 1805.0,
+    "volume": 3307368.9,
+    "negocios": 20.0
+  },
+  {
+    "date": "2026-11-06",
+    "mercadoria": "CCM",
+    "contratos_negociados": 879.0,
+    "volume": 876127.5,
+    "negocios": 8.0
+  },
+  {
+    "date": "2026-11-06",
+    "mercadoria": "DOL",
+    "contratos_negociados": 7480.0,
+    "volume": 54808632.5,
+    "negocios": 23.0
+  },
+  {
+    "date": "2026-11-06",
+    "mercadoria": "ICF",
+    "contratos_negociados": 0.0,
+    "volume": 0.0,
+    "negocios": 0.0
+  },
+  {
+    "date": "2026-11-06",
+    "mercadoria": "SJC",
+    "contratos_negociados": 20.0,
+    "volume": 87859.3,
+    "negocios": 2.0
+  }
+]
