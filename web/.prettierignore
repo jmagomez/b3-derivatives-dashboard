@@ -1,0 +1,6 @@
+# Saida de build: nao e codigo nosso e ja esta no .gitignore. Sem esta linha,
+# `prettier --check .` reprova 14 arquivos de dist/ e o gate passa a depender
+# de haver ou nao um build local na arvore -- verde na CI, vermelho na maquina
+# de quem acabou de rodar `npm run build`.
+dist/
+coverage/
