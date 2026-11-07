@@ -105,7 +105,9 @@ function Rodape() {
         informação, navegável por teclado e por leitor de tela. Datas sem cotação são descartadas,
         nunca interpoladas: por isso a curva não liga pontos por cima de um vencimento sem negócio.
       </p>
-      {data?.generated_at && <p className="mt-2">Gerado em {data.generated_at.replace('T', ' ')}.</p>}
+      {data?.generated_at && (
+        <p className="mt-2">Gerado em {data.generated_at.replace('T', ' ')}.</p>
+      )}
       <p className="mt-2">Conteúdo informativo. Não constitui recomendação de investimento.</p>
     </footer>
   );
