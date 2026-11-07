@@ -4,6 +4,7 @@ Markets/BCB vem dos fixtures REAIS. Os ajustes da B3 sao so a fiacao minima
 para o main() rodar (um DI1 e dois IND) -- os numeros deles nao sao afirmados
 em nenhum teste, so a existencia/forma do resultado.
 """
+
 import json
 import os
 import shutil

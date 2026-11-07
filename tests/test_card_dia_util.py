@@ -8,6 +8,7 @@ semana isso vira sabado/domingo -- uma data que nenhum outro indicador do
 dashboard tem -- em vez do ultimo pregao (sexta-feira, "o ultimo dia util
 antes do sabado").
 """
+
 import datetime as dt
 import os
 import sys

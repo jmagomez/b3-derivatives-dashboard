@@ -1,4 +1,5 @@
 """Smoke test: garante que todos os scripts compilam sem erro de sintaxe."""
+
 import pathlib
 import py_compile
 

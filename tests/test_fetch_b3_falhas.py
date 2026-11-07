@@ -4,6 +4,7 @@ Antes esse caso caia no mesmo balde de "nao houve pregao": fetch_day devolvia
 (None, None) e o dia era contado como vazio. O resultado foram buracos
 silenciosos no historico. Estes testes travam a distincao entre as duas situacoes.
 """
+
 import datetime as dt
 import os
 import sys

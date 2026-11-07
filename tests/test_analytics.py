@@ -10,6 +10,7 @@ Duas camadas:
    divulgacao da PTAX (menos 15/10, ainda nao publicado) e os valores
    reproduzem os degraus reais de data/bcb/cdi.csv.
 """
+
 import json
 import math
 import os
@@ -27,7 +28,11 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _pts(df, col):
-    return [{"date": d, "value": float(v)} for d, v in zip(df["date"], df[col]) if pd.notna(v)]
+    return [
+        {"date": d, "value": float(v)}
+        for d, v in zip(df["date"], df[col], strict=True)
+        if pd.notna(v)
+    ]
 
 
 def _s(valores: dict) -> pd.Series:
@@ -48,10 +53,13 @@ def real():
 
 @pytest.fixture(scope="module")
 def saida(real):
-    ind = [{"date": "2026-10-14", "value": 206739.0, "venc": None},
-           {"date": "2026-10-15", "value": 208485.0, "venc": "Z26"}]
-    return A.build(real["markets"], real["ptax"], real["cdi"], real["ipca"], ind,
-                   real["curva"], "2026-10-15")
+    ind = [
+        {"date": "2026-10-14", "value": 206739.0, "venc": None},
+        {"date": "2026-10-15", "value": 208485.0, "venc": "Z26"},
+    ]
+    return A.build(
+        real["markets"], real["ptax"], real["cdi"], real["ipca"], ind, real["curva"], "2026-10-15"
+    )
 
 
 def _linha(saida, codigo):
@@ -60,8 +68,14 @@ def _linha(saida, codigo):
 
 # ------------------------------------------------------------ utilidades
 def test_para_serie_ordena_deduplica_e_descarta_nan():
-    s = A.para_serie([{"date": "2026-01-03", "value": 3.0}, {"date": "2026-01-01", "value": 1.0},
-                      {"date": "2026-01-03", "value": 4.0}, {"date": "2026-01-02", "value": float("nan")}])
+    s = A.para_serie(
+        [
+            {"date": "2026-01-03", "value": 3.0},
+            {"date": "2026-01-01", "value": 1.0},
+            {"date": "2026-01-03", "value": 4.0},
+            {"date": "2026-01-02", "value": float("nan")},
+        ]
+    )
     assert list(s.index.strftime("%Y-%m-%d")) == ["2026-01-01", "2026-01-03"]
     assert list(s.values) == [1.0, 4.0]  # duplicata: vale a ultima
 
@@ -188,8 +202,16 @@ def test_sharpe_nao_assume_cdi_zero_quando_cdi_esta_atrasado():
 # -------------------------------------------------------------- correlacao
 def test_correlacao_perfeita_e_inversa_e_ignora_fim_de_semana():
     idx = pd.date_range("2026-01-05", periods=12, freq="D")  # inclui sabado/domingo
-    base = pd.Series(100.0 * np.cumprod(1 + np.array([0.01, -0.02, 0.015, 0.0, 0.02, -0.01, 0.01,
-                                                      -0.005, 0.02, 0.01, -0.03, 0.01])), index=idx)
+    base = pd.Series(
+        100.0
+        * np.cumprod(
+            1
+            + np.array(
+                [0.01, -0.02, 0.015, 0.0, 0.02, -0.01, 0.01, -0.005, 0.02, 0.01, -0.03, 0.01]
+            )
+        ),
+        index=idx,
+    )
     inv = 10000.0 / base
     c = A.correlacao({"A": base, "B": base * 2, "C": inv}, "2026-01-16", 5)
     assert c["matriz"][0][1] == pytest.approx(1.0, abs=1e-3)
@@ -210,10 +232,12 @@ def test_juro_real_formula_e_janela_do_ultimo_ipca():
     ipca = pd.Series(0.5, index=meses)
     cdi = pd.Series(0.04, index=pd.bdate_range("2025-09-15", "2026-10-14"))
     jr = A.juro_real(cdi, ipca)
-    assert jr["ipca_12m"] == pytest.approx((1.005 ** 12 - 1) * 100)
+    assert jr["ipca_12m"] == pytest.approx((1.005**12 - 1) * 100)
     n_du = len(cdi[(cdi.index >= "2025-10-01") & (cdi.index <= "2026-09-30")])
-    assert jr["cdi_12m"] == pytest.approx((1.0004 ** n_du - 1) * 100)
-    assert jr["real_12m"] == pytest.approx(((1 + jr["cdi_12m"] / 100) / (1 + jr["ipca_12m"] / 100) - 1) * 100)
+    assert jr["cdi_12m"] == pytest.approx((1.0004**n_du - 1) * 100)
+    assert jr["real_12m"] == pytest.approx(
+        ((1 + jr["cdi_12m"] / 100) / (1 + jr["ipca_12m"] / 100) - 1) * 100
+    )
     assert jr["janela_fim"] == pd.Timestamp("2026-09-30")
 
 
@@ -240,8 +264,10 @@ def test_taxa_no_prazo_interpola_linearmente_e_nao_extrapola():
 # ------------------------------------------------------------ base do IND
 def test_base_indice_calculo_direto():
     ibov = _s({"2026-10-14": 206506.0, "2026-10-15": 204324.0})
-    ind = [{"date": "2026-10-14", "value": 206739.0, "venc": None},
-           {"date": "2026-10-15", "value": 208485.0, "venc": "Z26"}]
+    ind = [
+        {"date": "2026-10-14", "value": 206739.0, "venc": None},
+        {"date": "2026-10-15", "value": 208485.0, "venc": "Z26"},
+    ]
     b = A.base_indice(ind, ibov)
     assert b["ultimo"]["pts"] == pytest.approx(208485.0 - 204324.0)
     assert b["ultimo"]["pct"] == pytest.approx((208485.0 / 204324.0 - 1) * 100)
@@ -251,7 +277,9 @@ def test_base_indice_calculo_direto():
 # ====================== dados reais: conferencia por aritmetica direta ======
 def test_real_ibov_12m_e_razao_direta_dos_fechamentos(saida):
     # bases/ref lidas direto de markets.csv: 15/10/2025 = 142.604; 15/10/2026 = 204.324
-    assert _linha(saida, "IBOV")["ret"]["12M"] == pytest.approx((204324.0 / 142604.0 - 1) * 100, abs=0.005)
+    assert _linha(saida, "IBOV")["ret"]["12M"] == pytest.approx(
+        (204324.0 / 142604.0 - 1) * 100, abs=0.005
+    )
 
 
 def test_real_ibov_em_dolar_12m(saida):
@@ -260,24 +288,34 @@ def test_real_ibov_em_dolar_12m(saida):
 
 
 def test_real_dolar_12m_e_ytd(saida):
-    assert _linha(saida, "USDBRL")["ret"]["12M"] == pytest.approx((5.0521 / 5.4464 - 1) * 100, abs=0.005)
-    assert _linha(saida, "USDBRL")["ret"]["YTD"] == pytest.approx((5.0521 / 5.5024 - 1) * 100, abs=0.005)
+    assert _linha(saida, "USDBRL")["ret"]["12M"] == pytest.approx(
+        (5.0521 / 5.4464 - 1) * 100, abs=0.005
+    )
+    assert _linha(saida, "USDBRL")["ret"]["YTD"] == pytest.approx(
+        (5.0521 / 5.5024 - 1) * 100, abs=0.005
+    )
 
 
 def test_real_ytd_ibov_usa_30_12_porque_31_12_nao_tem_cotacao(saida):
-    assert _linha(saida, "IBOV")["ret"]["YTD"] == pytest.approx((204324.0 / 161125.0 - 1) * 100, abs=0.005)
+    assert _linha(saida, "IBOV")["ret"]["YTD"] == pytest.approx(
+        (204324.0 / 161125.0 - 1) * 100, abs=0.005
+    )
 
 
 def test_real_bitcoin_fica_com_a_propria_data_de_referencia(saida):
     btc = _linha(saida, "BTC")
-    assert btc["ref"] == "2026-10-14"            # barra de 15/10 ainda nao existe nos dados
+    assert btc["ref"] == "2026-10-14"  # barra de 15/10 ainda nao existe nos dados
     assert _linha(saida, "IBOV")["ref"] == "2026-10-15"
     assert btc["ret"]["12M"] == pytest.approx((81562.4921875 / 110783.1640625 - 1) * 100, abs=0.005)
-    assert saida["correlacao"]["63"]["fim"] == "2026-10-14"  # painel comum termina onde o BTC termina
+    assert (
+        saida["correlacao"]["63"]["fim"] == "2026-10-14"
+    )  # painel comum termina onde o BTC termina
 
 
 def test_real_drawdown_atual_do_ibov(saida):
-    assert _linha(saida, "IBOV")["dd12m"]["atual"] == pytest.approx((204324.0 / 209067.0 - 1) * 100, abs=0.005)
+    assert _linha(saida, "IBOV")["dd12m"]["atual"] == pytest.approx(
+        (204324.0 / 209067.0 - 1) * 100, abs=0.005
+    )
 
 
 def test_real_maior_alta_diaria_do_ibov_e_05_10(saida):
@@ -307,7 +345,9 @@ def test_real_juro_real_confere_com_produto_direto(saida, real):
     jr = saida["juro_real"]
     assert jr["ipca_12m"] == pytest.approx(ipca12, abs=0.005)
     assert jr["cdi_12m"] == pytest.approx(cdi12, abs=0.005)
-    assert jr["real_12m"] == pytest.approx(((1 + cdi12 / 100) / (1 + ipca12 / 100) - 1) * 100, abs=0.01)
+    assert jr["real_12m"] == pytest.approx(
+        ((1 + cdi12 / 100) / (1 + ipca12 / 100) - 1) * 100, abs=0.01
+    )
 
 
 def test_real_cdi_acumulado_na_janela_do_ibovespa(saida, real):
@@ -352,9 +392,15 @@ def test_entradas_vazias_ou_parciais_nao_derrubam_o_build():
     assert all(v is None for v in vazio["linhas"][0]["ret"].values())
     assert vazio["juro_real"] is None and vazio["curva"] is None and vazio["base_ind"] is None
 
-    parcial = A.build({"ibov": [{"date": "2026-10-14", "value": 1.0},
-                                {"date": "2026-10-15", "value": 2.0}]},
-                      [], [], [], [], None, "2026-10-15")
+    parcial = A.build(
+        {"ibov": [{"date": "2026-10-14", "value": 1.0}, {"date": "2026-10-15", "value": 2.0}]},
+        [],
+        [],
+        [],
+        [],
+        None,
+        "2026-10-15",
+    )
     json.dumps(parcial, allow_nan=False)
 
 

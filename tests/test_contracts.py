@@ -1,4 +1,5 @@
 """Testes das expressoes regulares de contratos da B3 (fetch_b3)."""
+
 import os
 import re
 import sys

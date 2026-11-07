@@ -7,6 +7,7 @@ foi alterada nesta mesma sessao para rastrear "btc" separado de "markets"
 foi extraida de main() especificamente para poder ser testada sem tocar em
 disco (main() le e escreve arquivo).
 """
+
 import os
 import sys
 
@@ -96,5 +97,6 @@ def test_nome_e_limite_do_proprio_frescor_tem_precedencia():
 
 def test_fontes_py_e_a_unica_definicao_de_limites():
     import fontes
+
     assert set(fontes.FONTES) >= {"b3", "bcb", "eia", "markets", "btc"}
     assert not hasattr(build_email, "LIMITES") and not hasattr(build_email, "NOMES")

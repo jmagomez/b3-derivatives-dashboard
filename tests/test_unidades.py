@@ -5,6 +5,7 @@ cotados em taxa") esteve escrita em tres arquivos, com formatos diferentes, e
 a apresentacao rotulava a diferenca entre duas taxas como se fosse variacao
 relativa. Agora a regra mora em unidades.py e o payload carrega `var_unit`.
 """
+
 import json
 import os
 import sys
@@ -24,9 +25,24 @@ def test_contratos_cotados_em_taxa_variam_em_bps(code):
     assert u.unidade_variacao(code) == u.BPS
 
 
-@pytest.mark.parametrize("code", ["DOL", "IND", "DDI", "BGI", "CCM", "ICF",
-                                  "SJC", "BRENT", "WTI", "SP500", "NASDAQ",
-                                  "BTC", "IBOV"])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "DOL",
+        "IND",
+        "DDI",
+        "BGI",
+        "CCM",
+        "ICF",
+        "SJC",
+        "BRENT",
+        "WTI",
+        "SP500",
+        "NASDAQ",
+        "BTC",
+        "IBOV",
+    ],
+)
 def test_contratos_cotados_em_preco_variam_em_pct(code):
     assert u.unidade_variacao(code) == u.PCT
 
@@ -88,20 +104,23 @@ def test_taxa_zero_no_anterior_ainda_calcula():
 # --------------------------------------------------------------------------- #
 # Formatacao
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("valor,unidade,esperado", [
-    (-11.6, u.BPS, "-11,6 bps"),
-    (1.0, u.BPS, "+1 bp"),      # singular, e sem decimal inutil
-    (-1.0, u.BPS, "-1 bp"),
-    (12.0, u.BPS, "+12 bps"),
-    # Separador de milhar: sem ele o Python divergia do Intl.NumberFormat
-    # ('pt-BR') do front. Pego por teste de paridade, nao por inspecao.
-    (1234.5, u.BPS, "+1.234,5 bps"),
-    (-12345.67, u.PCT, "-12.345,67%"),
-    (0.54, u.PCT, "+0,54%"),
-    (-5.55, u.PCT, "-5,55%"),
-    (None, u.PCT, "—"),
-    (None, u.BPS, "—"),
-])
+@pytest.mark.parametrize(
+    "valor,unidade,esperado",
+    [
+        (-11.6, u.BPS, "-11,6 bps"),
+        (1.0, u.BPS, "+1 bp"),  # singular, e sem decimal inutil
+        (-1.0, u.BPS, "-1 bp"),
+        (12.0, u.BPS, "+12 bps"),
+        # Separador de milhar: sem ele o Python divergia do Intl.NumberFormat
+        # ('pt-BR') do front. Pego por teste de paridade, nao por inspecao.
+        (1234.5, u.BPS, "+1.234,5 bps"),
+        (-12345.67, u.PCT, "-12.345,67%"),
+        (0.54, u.PCT, "+0,54%"),
+        (-5.55, u.PCT, "-5,55%"),
+        (None, u.PCT, "—"),
+        (None, u.BPS, "—"),
+    ],
+)
 def test_formata(valor, unidade, esperado):
     assert u.formata(valor, unidade) == esperado
 
