@@ -6,10 +6,11 @@ Nao ha fonte gratuita para a curva de futuros ICE Brent/CME WTI (paginas de
 settlement sao protegidas por anti-bot e exigem assinatura) - por isso
 usamos apenas os precos a vista (spot).
 """
+
+import datetime as dt
 import os
 import sys
 import time
-import datetime as dt
 
 import pandas as pd
 import requests
@@ -19,11 +20,11 @@ BASE = "https://api.eia.gov/v2/petroleum/pri/spt/data/"
 
 # codigo da serie EIA -> nome da coluna no CSV
 SERIES = {
-    "RBRTE": "brent",                       # Europe Brent Spot Price FOB ($/bbl)
-    "RWTC": "wti",                          # Cushing OK WTI Spot Price FOB ($/bbl)
+    "RBRTE": "brent",  # Europe Brent Spot Price FOB ($/bbl)
+    "RWTC": "wti",  # Cushing OK WTI Spot Price FOB ($/bbl)
     "EER_EPMRU_PF4_Y35NY_DPG": "gasoline",  # NY Harbor Conventional Gasoline Regular ($/gal)
-    "EER_EPD2F_PF4_Y35NY_DPG": "diesel",    # NY Harbor No. 2 Heating Oil ($/gal) - proxy diesel
-    "EER_EPJK_PF4_RGC_DPG": "jet_fuel",     # US Gulf Coast Kerosene-Type Jet Fuel ($/gal)
+    "EER_EPD2F_PF4_Y35NY_DPG": "diesel",  # NY Harbor No. 2 Heating Oil ($/gal) - proxy diesel
+    "EER_EPJK_PF4_RGC_DPG": "jet_fuel",  # US Gulf Coast Kerosene-Type Jet Fuel ($/gal)
 }
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "eia.csv")
@@ -100,7 +101,9 @@ def update(start=dt.date(2020, 1, 1), end=None):
     df["serie"] = df["series"].map(SERIES)
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df = df.dropna(subset=["serie", "value"])
-    pivot = df.pivot_table(index="date", columns="serie", values="value", aggfunc="last").reset_index()
+    pivot = df.pivot_table(
+        index="date", columns="serie", values="value", aggfunc="last"
+    ).reset_index()
 
     if not old.empty:
         combined = (

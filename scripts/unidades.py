@@ -50,8 +50,8 @@ e-mail (daqui) e no dashboard (de la). Ha teste de paridade cobrindo isso.
 # Contratos cujo ajuste e uma taxa anualizada (% a.a.), e nao um preco.
 COTADOS_EM_TAXA = frozenset({"DI1", "FRC"})
 
-BPS = "bps"   # variacao = diferenca de taxa, em basis points
-PCT = "pct"   # variacao = variacao relativa de preco, em %
+BPS = "bps"  # variacao = diferenca de taxa, em basis points
+PCT = "pct"  # variacao = variacao relativa de preco, em %
 
 
 def unidade_variacao(code: str) -> str:

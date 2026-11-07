@@ -1,14 +1,14 @@
 """Gera os JSONs consumidos pelo dashboard (docs/data/) a partir dos CSVs."""
+
+import datetime as dt
+import glob
 import json
 import os
 import sys
-import glob
-import datetime as dt
-
-import numpy as np
-import pandas as pd
 
 import analytics
+import numpy as np
+import pandas as pd
 from fontes import FONTES, LIMITE_PADRAO
 from unidades import unidade_variacao, variacao
 
@@ -20,8 +20,20 @@ EIA_CSV = os.path.join(ROOT, "data", "eia.csv")
 MARKETS_CSV = os.path.join(ROOT, "data", "markets.csv")
 OUT = os.path.join(ROOT, "docs", "data")
 
-MONTH = {"F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
-         "N": 7, "Q": 8, "U": 9, "V": 10, "X": 11, "Z": 12}
+MONTH = {
+    "F": 1,
+    "G": 2,
+    "H": 3,
+    "J": 4,
+    "K": 5,
+    "M": 6,
+    "N": 7,
+    "Q": 8,
+    "U": 9,
+    "V": 10,
+    "X": 11,
+    "Z": 12,
+}
 
 TRACKED = {
     "DI1": "DI Futuro",
@@ -155,7 +167,14 @@ def di_front_rate_series(df: pd.DataFrame) -> list:
     for date, g in sub.groupby("date"):
         ref = dt.date.fromisoformat(date)
         g = g.copy()
-        g["du"] = g["mat"].map(lambda m: int(np.busday_count(ref.isoformat(), m.isoformat())) if m > ref else -1)
+        # `ref=ref` amarra a data desta iteracao. O .map() consome a lambda aqui
+        # mesmo, entao nao havia bug; o default deixa a garantia escrita em vez
+        # de depender de quem le saber que o map e imediato.
+        g["du"] = g["mat"].map(
+            lambda m, ref=ref: (
+                int(np.busday_count(ref.isoformat(), m.isoformat())) if m > ref else -1
+            )
+        )
         g = g[g["du"] > 20]
         if g.empty:
             continue
@@ -174,7 +193,10 @@ def di_front_rate_series(df: pd.DataFrame) -> list:
 
 def series_points(df: pd.DataFrame, col: str) -> list:
     sub = df[["date", col]].dropna()
-    return [{"date": d.strftime("%Y-%m-%d"), "value": round(float(v), 3)} for d, v in zip(sub["date"], sub[col])]
+    return [
+        {"date": d.strftime("%Y-%m-%d"), "value": round(float(v), 3)}
+        for d, v in zip(sub["date"], sub[col], strict=True)
+    ]
 
 
 def eia_payload() -> dict:
@@ -191,7 +213,11 @@ def eia_payload() -> dict:
         if col in df.columns:
             out[col] = series_points(df, col)
     if "brent" in df.columns:
-        for prod, key in (("gasoline", "crack_gasoline"), ("diesel", "crack_diesel"), ("jet_fuel", "crack_jet")):
+        for prod, key in (
+            ("gasoline", "crack_gasoline"),
+            ("diesel", "crack_diesel"),
+            ("jet_fuel", "crack_jet"),
+        ):
             if prod in df.columns:
                 sub = df[["date", "brent", prod]].dropna()
                 if sub.empty:
@@ -199,7 +225,7 @@ def eia_payload() -> dict:
                 vals = sub[prod] * 42 - sub["brent"]
                 out[key] = [
                     {"date": d.strftime("%Y-%m-%d"), "value": round(float(v), 3)}
-                    for d, v in zip(sub["date"], vals)
+                    for d, v in zip(sub["date"], vals, strict=True)
                 ]
     return out
 
@@ -253,9 +279,17 @@ def card(code: str, label: str, unit: str, serie: list):
     cur = uteis[-1]
     prev = uteis[-2] if len(uteis) >= 2 else None
     var = variacao(code, cur["value"], prev["value"]) if prev else None
-    return {"code": code, "label": label, "unit": unit, "date": cur["date"],
-            "value": cur["value"], "prev": prev["value"] if prev else None,
-            "variation": var, "var_unit": unidade_variacao(code), "venc": None}
+    return {
+        "code": code,
+        "label": label,
+        "unit": unit,
+        "date": cur["date"],
+        "value": cur["value"],
+        "prev": prev["value"] if prev else None,
+        "variation": var,
+        "var_unit": unidade_variacao(code),
+        "venc": None,
+    }
 
 
 def _gera_analytics(markets, bcb, payload_series, curva_info, as_of):
@@ -265,8 +299,14 @@ def _gera_analytics(markets, bcb, payload_series, curva_info, as_of):
         if not as_of:
             raise ValueError("sem last_date da B3 para ancorar a data de referencia")
         payload = analytics.build(
-            markets, bcb.get("ptax_venda", []), bcb.get("cdi", []), bcb.get("ipca", []),
-            payload_series.get("IND", {}).get("serie", []), curva_info, as_of)
+            markets,
+            bcb.get("ptax_venda", []),
+            bcb.get("cdi", []),
+            bcb.get("ipca", []),
+            payload_series.get("IND", {}).get("serie", []),
+            curva_info,
+            as_of,
+        )
         with open(path, "w") as f:
             json.dump(payload, f, ensure_ascii=False, allow_nan=False)
         return {"ok": True, "erro": None}
@@ -297,20 +337,34 @@ def main():
             payload_series[code] = {"label": label, "unit": unit, "serie": serie}
             if len(serie) >= 2:
                 cur, prev = serie[-1], serie[-2]
-                summary["items"].append({
-                    "code": code, "label": label, "unit": unit, "date": cur["date"],
-                    "value": cur["value"], "prev": prev["value"],
-                    "variation": variacao(code, cur["value"], prev["value"]),
-                    "var_unit": unidade_variacao(code),
-                    "venc": cur.get("venc"),
-                })
+                summary["items"].append(
+                    {
+                        "code": code,
+                        "label": label,
+                        "unit": unit,
+                        "date": cur["date"],
+                        "value": cur["value"],
+                        "prev": prev["value"],
+                        "variation": variacao(code, cur["value"], prev["value"]),
+                        "var_unit": unidade_variacao(code),
+                        "venc": cur.get("venc"),
+                    }
+                )
         curve = di_curve(df, last_date)
         # curva de ~1 ano atras para comparacao
         dates = sorted(df["date"].unique())
-        old_ref = [d for d in dates if d <= (dt.date.fromisoformat(last_date) - dt.timedelta(days=365)).isoformat()]
+        old_ref = [
+            d
+            for d in dates
+            if d <= (dt.date.fromisoformat(last_date) - dt.timedelta(days=365)).isoformat()
+        ]
         curve_old = di_curve(df, old_ref[-1]) if old_ref else []
-        curva_info = {"ref": last_date, "curve": curve,
-                      "ref_old": old_ref[-1] if old_ref else None, "curve_old": curve_old}
+        curva_info = {
+            "ref": last_date,
+            "curve": curve,
+            "ref_old": old_ref[-1] if old_ref else None,
+            "curve_old": curve_old,
+        }
         with open(os.path.join(OUT, "di_curve.json"), "w") as f:
             json.dump(curva_info, f)
 
@@ -336,8 +390,10 @@ def main():
     eia = eia_payload()
     with open(os.path.join(OUT, "eia.json"), "w") as f:
         json.dump(eia, f)
-    for key, code, label in (("brent", "BRENT", "Brent Dated (EIA)"),
-                             ("wti", "WTI", "WTI Spot (EIA)")):
+    for key, code, label in (
+        ("brent", "BRENT", "Brent Dated (EIA)"),
+        ("wti", "WTI", "WTI Spot (EIA)"),
+    ):
         it = card(code, label, UNITS[code], eia.get(key, []))
         if it:
             summary["items"].append(it)
@@ -382,9 +438,10 @@ def main():
     # derrubar a atualizacao diaria: registra o erro no summary (o dashboard
     # avisa) e REMOVE o analytics.json anterior em vez de deixar numero velho
     # aparecendo como atual -- ver `analytics_status` no summary.json.
-    summary["analytics_status"] = _gera_analytics(markets, bcb, payload_series,
-                                                  curva_info, summary.get("last_date"))
-    summary["generated_at_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    summary["analytics_status"] = _gera_analytics(
+        markets, bcb, payload_series, curva_info, summary.get("last_date")
+    )
+    summary["generated_at_utc"] = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
 
     with open(os.path.join(OUT, "summary.json"), "w") as f:
         json.dump(summary, f, ensure_ascii=False)

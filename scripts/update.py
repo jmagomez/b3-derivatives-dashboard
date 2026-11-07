@@ -11,12 +11,11 @@ do ultimo pregao da B3 disponivel) -- ver scripts/publicacao.py. No backfill (co
 --start) o gate nao se aplica: o objetivo e reconstruir historico. O resultado vai
 para $GITHUB_OUTPUT (publicar, novo) para o workflow decidir commit/e-mail.
 """
+
 import argparse
 import datetime as dt
 import json
 import os
-
-import pandas as pd
 
 import build_email
 import build_site
@@ -24,6 +23,7 @@ import fetch_b3
 import fetch_bcb
 import fetch_eia
 import fetch_markets
+import pandas as pd
 import publicacao
 
 
@@ -47,7 +47,9 @@ def _ultimo_publicado():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--start", type=dt.date.fromisoformat, help="backfill: data inicial (YYYY-MM-DD)")
+    ap.add_argument(
+        "--start", type=dt.date.fromisoformat, help="backfill: data inicial (YYYY-MM-DD)"
+    )
     ap.add_argument("--end", type=dt.date.fromisoformat, help="backfill: data final (padrao: hoje)")
     args = ap.parse_args(argv)
 
@@ -74,7 +76,9 @@ def main(argv=None):
         mk = pd.read_csv(build_site.MARKETS_CSV) if os.path.exists(build_site.MARKETS_CSV) else None
         d = publicacao.decidir(ref, mk, anterior)
         if not d["publicar"]:
-            print(f"::warning::Publicacao adiada: {d['motivo']}. Dados gravados em data/; docs/ e e-mail inalterados.")
+            print(
+                f"::warning::Publicacao adiada: {d['motivo']}. Dados gravados em data/; docs/ e e-mail inalterados."
+            )
             _saida(publicar=False, novo=False)
             return
     else:

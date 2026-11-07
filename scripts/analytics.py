@@ -24,6 +24,7 @@ Convencoes (tambem exibidas no dashboard, aba "Risco & Retorno"):
   de risco na mesma moeda). Para ativos em US$ nao ha taxa livre de risco em
   US$ nos dados do repositorio -- fica n/d, de proposito.
 """
+
 import math
 
 import numpy as np
@@ -66,7 +67,9 @@ def ate(s: pd.Series, data) -> pd.Series:
 
 
 def _arred(x, n=2):
-    return None if x is None or (isinstance(x, float) and not math.isfinite(x)) else round(float(x), n)
+    return (
+        None if x is None or (isinstance(x, float) and not math.isfinite(x)) else round(float(x), n)
+    )
 
 
 def _iso(ts):
@@ -140,8 +143,10 @@ def extremos(s: pd.Series, as_of, n: int = DIAS_UTEIS_ANO):
     r = ate(s, as_of).pct_change().dropna().iloc[-n:]
     if len(r) < n:
         return None
-    return {"melhor": {"pct": float(r.max() * 100), "data": r.idxmax()},
-            "pior": {"pct": float(r.min() * 100), "data": r.idxmin()}}
+    return {
+        "melhor": {"pct": float(r.max() * 100), "data": r.idxmax()},
+        "pior": {"pct": float(r.min() * 100), "data": r.idxmin()},
+    }
 
 
 def drawdown(s: pd.Series) -> pd.Series:
@@ -218,7 +223,7 @@ def sharpe_ex_post(s: pd.Series, cdi: pd.Series, as_of, n: int = DIAS_UTEIS_ANO)
     s = s[s.index <= cdi.index[-1]]
     if len(s) < n + 1:
         return None
-    s = s.iloc[-(n + 1):]
+    s = s.iloc[-(n + 1) :]
     if cdi.index[0] > s.index[0]:
         return None
     idx = indice_cdi(cdi)
@@ -257,7 +262,9 @@ def correlacao(series: dict, as_of, n: int):
     return {
         "ativos": list(c.columns),
         "matriz": [[_arred(x, 3) for x in linha] for linha in c.values.tolist()],
-        "n": int(len(r)), "inicio": _iso(r.index[0]), "fim": _iso(r.index[-1]),
+        "n": int(len(r)),
+        "inicio": _iso(r.index[0]),
+        "fim": _iso(r.index[-1]),
     }
 
 
@@ -279,9 +286,11 @@ def juro_real(cdi: pd.Series, ipca: pd.Series):
     cdi12 = cdi_entre(cdi, ini - pd.Timedelta(days=1), fim)
     ipca12 = float(((1 + ult / 100).prod() - 1) * 100)
     return {
-        "cdi_12m": cdi12, "ipca_12m": ipca12,
+        "cdi_12m": cdi12,
+        "ipca_12m": ipca12,
         "real_12m": ((1 + cdi12 / 100) / (1 + ipca12 / 100) - 1) * 100,
-        "janela_ini": ini, "janela_fim": fim,
+        "janela_ini": ini,
+        "janela_fim": fim,
     }
 
 
@@ -289,7 +298,10 @@ def cdi_anualizado(cdi: pd.Series):
     """Taxa CDI diaria mais recente anualizada (base 252), em %."""
     if cdi.empty:
         return None
-    return {"pct": float(((1 + cdi.iloc[-1] / 100) ** DIAS_UTEIS_ANO - 1) * 100), "data": cdi.index[-1]}
+    return {
+        "pct": float(((1 + cdi.iloc[-1] / 100) ** DIAS_UTEIS_ANO - 1) * 100),
+        "data": cdi.index[-1],
+    }
 
 
 # ----------------------------------------------------------------- curva DI
@@ -319,10 +331,14 @@ def curva_prazos(curva_info: dict):
     for a in PRAZOS_ANOS:
         agora = taxa_no_prazo(curva_info["curve"], ref, a)
         antes = taxa_no_prazo(curva_info.get("curve_old") or [], old, a) if old else None
-        linhas.append({
-            "anos": a, "atual": agora, "antes": antes,
-            "var_bp": None if agora is None or antes is None else (agora - antes) * 100,
-        })
+        linhas.append(
+            {
+                "anos": a,
+                "atual": agora,
+                "antes": antes,
+                "var_bp": None if agora is None or antes is None else (agora - antes) * 100,
+            }
+        )
     por = {x["anos"]: x for x in linhas}
 
     def incl(a, b, chave):
@@ -330,7 +346,9 @@ def curva_prazos(curva_info: dict):
         return None if va is None or vb is None else (vb - va) * 100
 
     return {
-        "ref": ref, "ref_old": old, "prazos": linhas,
+        "ref": ref,
+        "ref_old": old,
+        "prazos": linhas,
         "inclinacao_3a_1a_bp": {"atual": incl(1, 3, "atual"), "antes": incl(1, 3, "antes")},
         "inclinacao_10a_1a_bp": {"atual": incl(1, 10, "atual"), "antes": incl(1, 10, "antes")},
     }
@@ -356,9 +374,14 @@ def base_indice(ind_pts: list, ibov: pd.Series):
     j["pct"] = (j["ind"] / j["ibov"] - 1) * 100
     ult = j.index[-1]
     return {
-        "ultimo": {"date": ult, "ind": float(j.loc[ult, "ind"]), "ibov": float(j.loc[ult, "ibov"]),
-                   "pts": float(j.loc[ult, "pts"]), "pct": float(j.loc[ult, "pct"]),
-                   "venc": venc.get(ult)},
+        "ultimo": {
+            "date": ult,
+            "ind": float(j.loc[ult, "ind"]),
+            "ibov": float(j.loc[ult, "ibov"]),
+            "pts": float(j.loc[ult, "pts"]),
+            "pct": float(j.loc[ult, "pct"]),
+            "venc": venc.get(ult),
+        },
         "serie": j["pct"],
     }
 
@@ -389,9 +412,12 @@ def series_base(markets: dict, ptax: pd.Series) -> dict:
     return {
         "IBOV": ib,
         "IBOV_USD": converter(ib, ptax, "USD"),
-        "SP500": sp, "SP500_BRL": converter(sp, ptax, "BRL"),
-        "NASDAQ": nq, "NASDAQ_BRL": converter(nq, ptax, "BRL"),
-        "BTC": bt, "BTC_BRL": converter(bt, ptax, "BRL"),
+        "SP500": sp,
+        "SP500_BRL": converter(sp, ptax, "BRL"),
+        "NASDAQ": nq,
+        "NASDAQ_BRL": converter(nq, ptax, "BRL"),
+        "BTC": bt,
+        "BTC_BRL": converter(bt, ptax, "BRL"),
         "USDBRL": ptax,
     }
 
@@ -409,23 +435,39 @@ def linha(codigo, rotulo, moeda, s, cdi, as_of):
     sh = sharpe_ex_post(s, cdi, as_of) if codigo in EM_REAIS else None
     ext = extremos(s, as_of)
     return {
-        "codigo": codigo, "rotulo": rotulo, "moeda": moeda,
+        "codigo": codigo,
+        "rotulo": rotulo,
+        "moeda": moeda,
         "ref": _iso(ate_s.index[-1]) if len(ate_s) else None,
-        "ret": ret, "vol": vol,
-        "dd12m": None if dd is None else {
-            "max": _arred(dd["max_pct"]), "vale": _iso(dd["vale"]), "atual": _arred(dd["atual_pct"])},
+        "ret": ret,
+        "vol": vol,
+        "dd12m": None
+        if dd is None
+        else {
+            "max": _arred(dd["max_pct"]),
+            "vale": _iso(dd["vale"]),
+            "atual": _arred(dd["atual_pct"]),
+        },
         "sharpe_12m": None if sh is None else _arred(sh["sharpe"]),
         # Numerador do Sharpe, em % a.a.: sem ele a tela mostraria um Sharpe
         # positivo ao lado de um excesso composto negativo sem explicar como.
         "excesso_arit_12m": None if sh is None else _arred(sh["excesso_arit_pct"]),
         "vol_excesso_12m": None if sh is None else _arred(sh["vol_excesso_pct"]),
-        "extremos_12m": None if ext is None else {
-            k: {"pct": _arred(v["pct"]), "data": _iso(v["data"])} for k, v in ext.items()},
+        "extremos_12m": None
+        if ext is None
+        else {k: {"pct": _arred(v["pct"]), "data": _iso(v["data"])} for k, v in ext.items()},
     }
 
 
-def build(markets: dict, ptax_pts: list, cdi_pts: list, ipca_pts: list,
-          ind_pts: list, curva_info: dict, as_of: str) -> dict:
+def build(
+    markets: dict,
+    ptax_pts: list,
+    cdi_pts: list,
+    ipca_pts: list,
+    ind_pts: list,
+    curva_info: dict,
+    as_of: str,
+) -> dict:
     """Monta o payload de docs/data/analytics.json. `as_of` = ultimo pregao B3."""
     ptax, cdi, ipca = para_serie(ptax_pts), para_serie(cdi_pts), para_serie(ipca_pts)
     s = series_base(markets, ptax)
@@ -443,8 +485,14 @@ def build(markets: dict, ptax_pts: list, cdi_pts: list, ipca_pts: list,
     # excesso sobre o CDI (p.p., aritmetico) nas janelas ja calculadas
     for item in linhas:
         if item["codigo"] in EM_REAIS:
-            item["excesso_cdi"] = {k: (None if item["ret"][k] is None or cdi_ret[k] is None
-                                       else _arred(item["ret"][k] - cdi_ret[k])) for k in item["ret"]}
+            item["excesso_cdi"] = {
+                k: (
+                    None
+                    if item["ret"][k] is None or cdi_ret[k] is None
+                    else _arred(item["ret"][k] - cdi_ret[k])
+                )
+                for k in item["ret"]
+            }
 
     corr_series = {k: s[k] for k in ("IBOV", "SP500", "NASDAQ", "BTC")}
     correl = {str(n): correlacao(corr_series, as_of, n) for n in JANELAS_CORR}
@@ -454,8 +502,10 @@ def build(markets: dict, ptax_pts: list, cdi_pts: list, ipca_pts: list,
     base = base_indice(ind_pts, s["IBOV"])
 
     corte = pd.Timestamp(as_of) - pd.DateOffset(years=ANOS_SERIES_GRAFICO)
-    dd_series = {c: pontos(drawdown(s[c])[lambda x: x.index >= corte] * 100, 2)
-                 for c in ("IBOV", "SP500", "NASDAQ", "BTC")}
+    dd_series = {
+        c: pontos(drawdown(s[c])[lambda x: x.index >= corte] * 100, 2)
+        for c in ("IBOV", "SP500", "NASDAQ", "BTC")
+    }
     ibov_brl_usd = {
         "R$": pontos(s["IBOV"][s["IBOV"].index >= corte]),
         "US$": pontos(s["IBOV_USD"][s["IBOV_USD"].index >= corte]),
@@ -464,19 +514,37 @@ def build(markets: dict, ptax_pts: list, cdi_pts: list, ipca_pts: list,
     return {
         "as_of": as_of,
         "linhas": linhas,
-        "cdi": {"ret": cdi_ret, "ate": _iso(cdi.index[-1]) if len(cdi) else None,
-                "anualizado_atual": None if ca is None else {"pct": _arred(ca["pct"]), "data": _iso(ca["data"])}},
+        "cdi": {
+            "ret": cdi_ret,
+            "ate": _iso(cdi.index[-1]) if len(cdi) else None,
+            "anualizado_atual": None
+            if ca is None
+            else {"pct": _arred(ca["pct"]), "data": _iso(ca["data"])},
+        },
         "correlacao": correl,
-        "juro_real": None if jr is None else {
-            "cdi_12m": _arred(jr["cdi_12m"]), "ipca_12m": _arred(jr["ipca_12m"]),
+        "juro_real": None
+        if jr is None
+        else {
+            "cdi_12m": _arred(jr["cdi_12m"]),
+            "ipca_12m": _arred(jr["ipca_12m"]),
             "real_12m": _arred(jr["real_12m"]),
-            "janela_ini": _iso(jr["janela_ini"]), "janela_fim": _iso(jr["janela_fim"])},
+            "janela_ini": _iso(jr["janela_ini"]),
+            "janela_fim": _iso(jr["janela_fim"]),
+        },
         "curva": _curva_json(curva_prazos(curva_info)),
-        "base_ind": None if base is None else {
-            "ultimo": {**{k: _arred(v) if isinstance(v, float) else v
-                          for k, v in base["ultimo"].items() if k != "date"},
-                       "date": _iso(base["ultimo"]["date"])},
-            "serie": pontos(base["serie"][base["serie"].index >= corte], 3)},
+        "base_ind": None
+        if base is None
+        else {
+            "ultimo": {
+                **{
+                    k: _arred(v) if isinstance(v, float) else v
+                    for k, v in base["ultimo"].items()
+                    if k != "date"
+                },
+                "date": _iso(base["ultimo"]["date"]),
+            },
+            "serie": pontos(base["serie"][base["serie"].index >= corte], 3),
+        },
         "series": {"drawdown": dd_series, "ibov_brl_usd": ibov_brl_usd},
     }
 
@@ -485,9 +553,17 @@ def _curva_json(c):
     if c is None:
         return None
     return {
-        "ref": c["ref"], "ref_old": c["ref_old"],
-        "prazos": [{"anos": p["anos"], "atual": _arred(p["atual"], 3), "antes": _arred(p["antes"], 3),
-                    "var_bp": _arred(p["var_bp"], 1)} for p in c["prazos"]],
+        "ref": c["ref"],
+        "ref_old": c["ref_old"],
+        "prazos": [
+            {
+                "anos": p["anos"],
+                "atual": _arred(p["atual"], 3),
+                "antes": _arred(p["antes"], 3),
+                "var_bp": _arred(p["var_bp"], 1),
+            }
+            for p in c["prazos"]
+        ],
         "inclinacao_3a_1a_bp": {k: _arred(v, 1) for k, v in c["inclinacao_3a_1a_bp"].items()},
         "inclinacao_10a_1a_bp": {k: _arred(v, 1) for k, v in c["inclinacao_10a_1a_bp"].items()},
     }

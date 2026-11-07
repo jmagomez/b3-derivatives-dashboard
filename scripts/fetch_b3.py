@@ -9,11 +9,12 @@ Cobertura gratuita: ~12 meses retroativos. Datas anteriores retornam vazio
 e sao ignoradas (a B3 nao disponibiliza mais o historico antigo em formato
 aberto - ver README).
 """
+
+import datetime as dt
 import io
 import os
 import sys
 import time
-import datetime as dt
 
 import pandas as pd
 import requests
@@ -37,8 +38,17 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 DATA_DIR = os.path.join(ROOT, "data", "ajustes")
 OPCOES = os.path.join(ROOT, "data", "opcoes.csv")
 
-FUT_COLS = ["date", "codigo", "vencimento", "ajuste_anterior", "ajuste_atual",
-            "variacao", "taxa", "contratos", "volume"]
+FUT_COLS = [
+    "date",
+    "codigo",
+    "vencimento",
+    "ajuste_anterior",
+    "ajuste_atual",
+    "variacao",
+    "taxa",
+    "contratos",
+    "volume",
+]
 
 
 class ArquivoIndisponivel(Exception):
@@ -62,10 +72,12 @@ def nova_sessao() -> requests.Session:
 
 
 def _pede_token(sess, date: dt.date) -> str:
-    r = sess.get(f"{BASE}/requestname",
-                 params={"fileName": "TradeInformationConsolidatedFile",
-                         "date": date.isoformat()},
-                 headers=HEADERS, timeout=60)
+    r = sess.get(
+        f"{BASE}/requestname",
+        params={"fileName": "TradeInformationConsolidatedFile", "date": date.isoformat()},
+        headers=HEADERS,
+        timeout=60,
+    )
     r.raise_for_status()
     ctype = r.headers.get("Content-Type", "")
     if "json" not in ctype.lower():
@@ -113,8 +125,14 @@ def fetch_day(date: dt.date, session=None, retries=3):
     else:
         raise FalhaFonte(f"falha ao baixar TIC de {date} apos {retries} tentativas: {last_err}")
 
-    df = pd.read_csv(io.BytesIO(conteudo), sep=";", skiprows=1, decimal=",",
-                     encoding="latin1", dtype={"TckrSymb": str})
+    df = pd.read_csv(
+        io.BytesIO(conteudo),
+        sep=";",
+        skiprows=1,
+        decimal=",",
+        encoding="latin1",
+        dtype={"TckrSymb": str},
+    )
     df = df.rename(columns=lambda c: c.strip())
     if "TckrSymb" not in df.columns:
         raise FalhaFonte(f"CSV de {date} sem a coluna TckrSymb (colunas: {list(df.columns)[:6]})")
@@ -138,15 +156,21 @@ def fetch_day(date: dt.date, session=None, retries=3):
         opt["mercadoria"] = oext[0]
         for c in ("TradQty", "FinInstrmQty", "NtlFinVol"):
             opt[c] = pd.to_numeric(opt.get(c), errors="coerce").fillna(0)
-        agg = opt.groupby("mercadoria").agg(
-            contratos_negociados=("FinInstrmQty", "sum"),
-            volume=("NtlFinVol", "sum"),
-            negocios=("TradQty", "sum")).reset_index()
+        agg = (
+            opt.groupby("mercadoria")
+            .agg(
+                contratos_negociados=("FinInstrmQty", "sum"),
+                volume=("NtlFinVol", "sum"),
+                negocios=("TradQty", "sum"),
+            )
+            .reset_index()
+        )
         agg["date"] = date.isoformat()
         agg = agg[["date", "mercadoria", "contratos_negociados", "volume", "negocios"]]
     else:
-        agg = pd.DataFrame(columns=["date", "mercadoria", "contratos_negociados",
-                                    "volume", "negocios"])
+        agg = pd.DataFrame(
+            columns=["date", "mercadoria", "contratos_negociados", "volume", "negocios"]
+        )
     return fut, agg
 
 
@@ -160,13 +184,19 @@ def load_year(year: int) -> pd.DataFrame:
 def save_year(year: int, df: pd.DataFrame):
     os.makedirs(DATA_DIR, exist_ok=True)
     df = df.sort_values(["date", "codigo", "vencimento"]).drop_duplicates(
-        subset=["date", "codigo", "vencimento"], keep="last")
+        subset=["date", "codigo", "vencimento"], keep="last"
+    )
     df.to_csv(os.path.join(DATA_DIR, f"{year}.csv"), index=False)
 
 
 def save_opcoes(frames):
-    old = pd.read_csv(OPCOES) if os.path.exists(OPCOES) else pd.DataFrame(
-        columns=["date", "mercadoria", "contratos_negociados", "volume", "negocios"])
+    old = (
+        pd.read_csv(OPCOES)
+        if os.path.exists(OPCOES)
+        else pd.DataFrame(
+            columns=["date", "mercadoria", "contratos_negociados", "volume", "negocios"]
+        )
+    )
     df = pd.concat([old] + frames, ignore_index=True)
     df = df.drop_duplicates(subset=["date", "mercadoria"], keep="last").sort_values("date")
     os.makedirs(os.path.dirname(OPCOES), exist_ok=True)
@@ -222,15 +252,21 @@ def update_range(start: dt.date, end: dt.date, pause=1.0, max_days=None):
             if obuf:
                 save_opcoes(obuf)
             buf, obuf = {}, []
-            print(f"[fetch_b3] progresso {i + 1}/{len(todo)} "
-                  f"(ok={fetched} sem_arquivo={sem_arquivo} falhas={len(falhas)})")
+            print(
+                f"[fetch_b3] progresso {i + 1}/{len(todo)} "
+                f"(ok={fetched} sem_arquivo={sem_arquivo} falhas={len(falhas)})"
+            )
         time.sleep(pause)
-    print(f"[fetch_b3] concluido: {fetched} pregoes salvos, "
-          f"{sem_arquivo} sem arquivo, {len(falhas)} falha(s)")
+    print(
+        f"[fetch_b3] concluido: {fetched} pregoes salvos, "
+        f"{sem_arquivo} sem arquivo, {len(falhas)} falha(s)"
+    )
     if falhas:
-        print(f"[fetch_b3] ATENCAO: {len(falhas)} dia(s) falharam e serao retentados "
-              f"na proxima execucao: {', '.join(str(d) for d, _ in falhas[:10])}",
-              file=sys.stderr)
+        print(
+            f"[fetch_b3] ATENCAO: {len(falhas)} dia(s) falharam e serao retentados "
+            f"na proxima execucao: {', '.join(str(d) for d, _ in falhas[:10])}",
+            file=sys.stderr,
+        )
     return len(falhas)
 
 

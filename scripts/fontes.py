@@ -8,6 +8,7 @@ Chaves: b3, bcb, eia, markets (S&P 500/Nasdaq/Ibovespa) e btc (rastreado a parte
 porque negocia fim de semana -- ver README, "Bitcoin: card de resumo vs. grafico").
 Limite = dias corridos tolerados antes de acusar atraso.
 """
+
 FONTES = {
     "b3": ("contratos da B3", 4),
     "bcb": ("indicadores do BCB", 5),

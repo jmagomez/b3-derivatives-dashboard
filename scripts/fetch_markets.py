@@ -42,6 +42,7 @@ Mesmo as 00:00 UTC o Yahoo pode demorar a consolidar a barra do BTC: nesse caso 
 barra simplesmente ainda nao existe aqui e a publicacao do dashboard e adiada
 ate ela aparecer (scripts/publicacao.py) -- nunca se grava valor intradiario.
 """
+
 import datetime as dt
 import os
 import sys
@@ -73,7 +74,7 @@ COLS = ["date"] + list(SERIES.values())
 
 
 def _agora_utc() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _hoje_utc() -> dt.date:
@@ -83,7 +84,7 @@ def _hoje_utc() -> dt.date:
 def barra_fechada(ticker: str, data: dt.date, agora: dt.datetime) -> bool:
     """A barra diaria de `data` para `ticker` ja e um fechamento consolidado?"""
     minutos = FECHAMENTO_MIN_UTC.get(ticker, PADRAO_FECHAMENTO_MIN)
-    corte = dt.datetime.combine(data, dt.time(0, 0), tzinfo=dt.timezone.utc) + dt.timedelta(minutes=minutos)
+    corte = dt.datetime.combine(data, dt.time(0, 0), tzinfo=dt.UTC) + dt.timedelta(minutes=minutos)
     return agora >= corte
 
 
@@ -95,19 +96,23 @@ def normaliza(bruto: dict, agora=None) -> pd.DataFrame:
     """
     agora = agora or _agora_utc()
     if agora.tzinfo is None:
-        agora = agora.replace(tzinfo=dt.timezone.utc)
+        agora = agora.replace(tzinfo=dt.UTC)
     quadros = []
     for ticker, coluna in SERIES.items():
         s = bruto.get(ticker)
         if s is None or len(s) == 0:
             continue
-        df = pd.DataFrame({
-            "date": pd.to_datetime(pd.Series(list(s.index))).dt.date,
-            coluna: pd.to_numeric(pd.Series(list(s.values)), errors="coerce"),
-        })
+        df = pd.DataFrame(
+            {
+                "date": pd.to_datetime(pd.Series(list(s.index))).dt.date,
+                coluna: pd.to_numeric(pd.Series(list(s.values)), errors="coerce"),
+            }
+        )
         df = df.dropna(subset=[coluna])
         # descarta a barra ainda em formacao (ver docstring do modulo)
-        df = df[df["date"].map(lambda d: barra_fechada(ticker, d, agora))]
+        # `ticker=ticker` pelo mesmo motivo do build_site: o .map() e imediato,
+        # mas a garantia fica escrita.
+        df = df[df["date"].map(lambda d, ticker=ticker: barra_fechada(ticker, d, agora))]
         df = df.drop_duplicates(subset=["date"], keep="last")
         if len(df):
             quadros.append(df)

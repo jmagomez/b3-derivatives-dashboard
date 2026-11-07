@@ -1,17 +1,18 @@
 """Series diarias/mensais do Banco Central (API SGS) - gratuitas e estaveis."""
+
+import datetime as dt
 import os
 import sys
 import time
-import datetime as dt
 
 import pandas as pd
 import requests
 
 SERIES = {
-    "cdi": 12,        # CDI diario (% a.d.)
-    "selic": 11,      # Selic diaria (% a.d.)
+    "cdi": 12,  # CDI diario (% a.d.)
+    "selic": 11,  # Selic diaria (% a.d.)
     "ptax_venda": 1,  # Dolar PTAX venda
-    "ipca": 433,      # IPCA mensal (% a.m.)
+    "ipca": 433,  # IPCA mensal (% a.m.)
 }
 # A serie 7 (Ibovespa a vista) FOI REMOVIDA: o SGS responde HTTP 200 com corpo
 # vazio para qualquer intervalo, inclusive 2020 -- ela nunca gerou

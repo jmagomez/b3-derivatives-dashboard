@@ -1,4 +1,5 @@
 """Gera o corpo HTML do e-mail diario a partir de docs/data/summary.json."""
+
 import json
 import os
 
@@ -40,7 +41,9 @@ def mensagens_atraso(frescor: dict) -> list:
         rotulo_pad, limite_pad = FONTES.get(k, (k, LIMITE_PADRAO))
         limite = v.get("limite", limite_pad)
         if v.get("dias") is not None and v["dias"] > limite:
-            msgs.append(f"{v.get('nome', rotulo_pad)} parado em {fmt_date(v.get('last_date'))} ({v['dias']} dias)")
+            msgs.append(
+                f"{v.get('nome', rotulo_pad)} parado em {fmt_date(v.get('last_date'))} ({v['dias']} dias)"
+            )
     return msgs
 
 
@@ -62,7 +65,11 @@ def main():
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:{color}'>{var_txt}</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right;color:#999;font-size:12px'>{fmt_date(it.get('date'))}</td></tr>"
         )
-    link = f"<p><a href='{PAGES_URL}' style='color:#1a56db'>Abrir dashboard completo</a></p>" if PAGES_URL else ""
+    link = (
+        f"<p><a href='{PAGES_URL}' style='color:#1a56db'>Abrir dashboard completo</a></p>"
+        if PAGES_URL
+        else ""
+    )
 
     # Aviso de defasagem: sem isso o e-mail diario apresenta o ultimo fechamento
     # bom como se fosse o de hoje, e uma quebra na coleta passa semanas sem ser
@@ -90,10 +97,10 @@ def main():
       <th style="padding:6px 10px;text-align:right">Var. d/d</th>
       <th style="padding:6px 10px;text-align:right">Ref.</th>
     </tr>
-    {''.join(rows)}
+    {"".join(rows)}
   </table>
   {link}
-  <p style="color:#999;font-size:12px">Gerado automaticamente em {s.get('generated_at','')}. Dados desde 01/01/2020.</p>
+  <p style="color:#999;font-size:12px">Gerado automaticamente em {s.get("generated_at", "")}. Dados desde 01/01/2020.</p>
 </div>
 """
     with open(OUT, "w") as f:

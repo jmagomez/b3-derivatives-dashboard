@@ -7,6 +7,7 @@ coletados sao guardados (data/), mas docs/ e o e-mail NAO sao regenerados --
 o dashboard continua mostrando o ultimo conjunto completo. Nada e estimado
 nem preenchido com valor intradiario.
 """
+
 import pandas as pd
 
 
@@ -24,6 +25,9 @@ def decidir(ref_date, markets: pd.DataFrame, ultimo_publicado) -> dict:
     if not ref_date:
         return {"publicar": False, "novo": False, "motivo": "sem pregao da B3 nos dados"}
     if not btc_fechado(markets, ref_date):
-        return {"publicar": False, "novo": False,
-                "motivo": f"fechamento do bitcoin de {ref_date} ainda nao disponivel"}
+        return {
+            "publicar": False,
+            "novo": False,
+            "motivo": f"fechamento do bitcoin de {ref_date} ainda nao disponivel",
+        }
     return {"publicar": True, "novo": ref_date != ultimo_publicado, "motivo": "ok"}
