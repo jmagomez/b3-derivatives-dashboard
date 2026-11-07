@@ -103,3 +103,140 @@ export const curvaDISchema = z.object({
 export type SummaryValidado = z.infer<typeof summarySchema>;
 export type SeriesValidado = z.infer<typeof seriesSchema>;
 export type CurvaDIValidado = z.infer<typeof curvaDISchema>;
+
+/* ==========================================================================
+   Demais payloads
+   ========================================================================== */
+
+const pontoSimplesSchema = z.object({
+  date: z.string().regex(ISO_DATE),
+  value: z.number().finite(),
+});
+
+/** Chaves variam (sp500, btc, brent, crack_diesel, cdi...): record aberto. */
+const seriesPorChaveSchema = z.record(z.string(), z.array(pontoSimplesSchema));
+
+export const marketsSchema = seriesPorChaveSchema;
+export const eiaSchema = seriesPorChaveSchema;
+export const bcbSchema = seriesPorChaveSchema;
+
+export const opcoesSchema = z.array(
+  z.object({
+    date: z.string().regex(ISO_DATE),
+    mercadoria: z.string().min(1),
+    contratos_negociados: z.number().finite(),
+    volume: z.number().finite(),
+    negocios: z.number().finite(),
+  }),
+);
+
+const janelaSchema = z.record(z.string(), z.number().finite().nullable());
+
+const linhaAnalyticsSchema = z
+  .object({
+    codigo: z.string().min(1),
+    rotulo: z.string().min(1),
+    moeda: z.string(),
+    ref: z.string().regex(ISO_DATE).nullable(),
+    ret: janelaSchema,
+    vol: janelaSchema,
+    dd12m: z
+      .object({
+        max: z.number().finite().nullable(),
+        vale: z.string().nullable(),
+        atual: z.number().finite().nullable(),
+      })
+      .nullable(),
+    sharpe_12m: z.number().finite().nullable(),
+    excesso_arit_12m: z.number().finite().nullable(),
+    vol_excesso_12m: z.number().finite().nullable(),
+    extremos_12m: z
+      .record(
+        z.string(),
+        z.object({ pct: z.number().finite().nullable(), data: z.string().nullable() }),
+      )
+      .nullable(),
+    excesso_cdi: janelaSchema.optional(),
+  })
+  .superRefine((l, ctx) => {
+    // Sharpe so existe onde ha taxa livre de risco na moeda do ativo: os dados
+    // do repositorio nao tem risk-free em US$. Um Sharpe em ativo de US$
+    // significaria que alguem comparou com o CDI, o que seria errado.
+    if (l.moeda === 'US$' && l.sharpe_12m !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${l.codigo}: Sharpe em ativo de US$ — nao ha risk-free em US$ nos dados`,
+      });
+    }
+    // O numerador tem de vir junto com o indice, e vice-versa.
+    if ((l.sharpe_12m === null) !== (l.excesso_arit_12m === null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${l.codigo}: sharpe_12m e excesso_arit_12m precisam existir juntos`,
+      });
+    }
+  });
+
+export const analyticsSchema = z.object({
+  as_of: z.string().regex(ISO_DATE),
+  linhas: z.array(linhaAnalyticsSchema).min(1),
+  cdi: z.object({
+    ret: janelaSchema,
+    ate: z.string().nullable(),
+    anualizado_atual: z
+      .object({ pct: z.number().finite().nullable(), data: z.string().nullable() })
+      .nullable(),
+  }),
+  correlacao: z.record(
+    z.string(),
+    z.object({
+      ativos: z.array(z.string()),
+      matriz: z.array(z.array(z.number().finite())),
+      n: z.number().int().positive(),
+      inicio: z.string().regex(ISO_DATE),
+      fim: z.string().regex(ISO_DATE),
+    }),
+  ),
+  juro_real: z
+    .object({
+      cdi_12m: z.number().finite().nullable(),
+      ipca_12m: z.number().finite().nullable(),
+      real_12m: z.number().finite().nullable(),
+      janela_ini: z.string().nullable(),
+      janela_fim: z.string().nullable(),
+    })
+    .nullable(),
+  curva: z
+    .object({
+      ref: z.string().regex(ISO_DATE),
+      ref_old: z.string().nullable(),
+      prazos: z.array(
+        z.object({
+          anos: z.number().int().positive(),
+          atual: z.number().finite().nullable(),
+          antes: z.number().finite().nullable(),
+          var_bp: z.number().finite().nullable(),
+        }),
+      ),
+    })
+    .nullable(),
+  base_ind: z
+    .object({
+      ultimo: z
+        .object({
+          ind: z.number().finite(),
+          ibov: z.number().finite(),
+          pts: z.number().finite(),
+          pct: z.number().finite(),
+          venc: z.string().nullable(),
+          date: z.string().regex(ISO_DATE),
+        })
+        .nullable(),
+      serie: z.array(pontoSimplesSchema),
+    })
+    .nullable(),
+  series: z.object({
+    drawdown: z.record(z.string(), z.array(pontoSimplesSchema)).optional(),
+    ibov_brl_usd: z.record(z.string(), z.array(pontoSimplesSchema)).optional(),
+  }),
+});
