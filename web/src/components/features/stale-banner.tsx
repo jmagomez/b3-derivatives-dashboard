@@ -18,7 +18,10 @@ export function StaleBanner({ frescor }: { frescor: Record<string, Frescor> }) {
   if (atrasadas.length === 0) return null;
 
   return (
-    <div role="alert" className="flex gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">
+    <div
+      role="alert"
+      className="flex gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm"
+    >
       <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
       <div>
         <strong className="font-semibold">Dados possivelmente defasados.</strong>{' '}
