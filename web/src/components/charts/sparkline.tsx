@@ -55,7 +55,11 @@ export function Sparkline({ valores, direcao, className, rotulo }: Props) {
           <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon points={`0,${A} ${pontos.join(' ')} ${L},${A}`} fill={`url(#g${id})`} stroke="none" />
+      <polygon
+        points={`0,${A} ${pontos.join(' ')} ${L},${A}`}
+        fill={`url(#g${id})`}
+        stroke="none"
+      />
       <polyline
         points={pontos.join(' ')}
         fill="none"
