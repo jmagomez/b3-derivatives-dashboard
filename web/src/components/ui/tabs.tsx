@@ -11,7 +11,19 @@ export const Tabs = RadixTabs.Root;
 
 export function TabsList({ className, ...props }: ComponentPropsWithoutRef<typeof RadixTabs.List>) {
   return (
-    <RadixTabs.List className={cn('flex gap-1 border-b border-border', className)} {...props} />
+    <RadixTabs.List
+      className={cn(
+        // Dez abas nao cabem em tela de telefone. Rolagem HORIZONTAL em vez de
+        // quebra de linha: com flex-wrap a borda inferior passa a cortar o meio
+        // da lista e a aba ativa perde a referencia visual de "linha de base".
+        // As setas do Radix levam o foco para a aba fora de vista e o browser
+        // rola ate ela, entao a navegacao por teclado alcanca todas.
+        'flex gap-1 overflow-x-auto border-b border-border',
+        '[scrollbar-width:thin]',
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -22,7 +34,8 @@ export function TabsTrigger({
   return (
     <RadixTabs.Trigger
       className={cn(
-        'relative -mb-px px-3 py-2 text-sm font-medium text-muted transition-colors',
+        'relative -mb-px shrink-0 whitespace-nowrap px-3 py-2 text-sm font-medium text-muted',
+        'transition-colors',
         'hover:text-fg',
         // A aba ativa e marcada por COR e por uma barra inferior: cor sozinha
         // nao serve a quem nao distingue matiz (WCAG 1.4.1).

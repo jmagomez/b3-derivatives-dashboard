@@ -93,3 +93,19 @@ export function agrupa(itens: readonly Quote[]): { secoes: Secao[]; orfaos: Quot
   const orfaos = itens.filter((i) => !usados.has(i.code));
   return { secoes, orfaos };
 }
+
+/**
+ * Extrai as series cruas de um payload no formato de series.json, onde cada
+ * contrato e {label, unit, serie} e nao um array direto.
+ *
+ * Existe porque o atalho -- um cast para o formato de array -- passa no
+ * typecheck e QUEBRA em runtime: `data['DOL'].length` fica undefined, o
+ * grafico e silenciosamente pulado e ninguem percebe que o dolar sumiu da
+ * aba. Converter de verdade custa tres linhas.
+ */
+export function somenteSeries(
+  dados: Record<string, { serie: import('@/types/dashboard').SeriePonto[] }> | undefined,
+): Record<string, import('@/types/dashboard').SeriePonto[]> | undefined {
+  if (!dados) return undefined;
+  return Object.fromEntries(Object.entries(dados).map(([k, v]) => [k, v.serie]));
+}

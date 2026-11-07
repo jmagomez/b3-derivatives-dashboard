@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:a11y": "vitest run tests/a11y",
     "validate:data": "tsx scripts/validate-data-contract.ts"
   },
   "dependencies": {

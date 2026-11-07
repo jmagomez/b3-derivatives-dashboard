@@ -116,3 +116,101 @@ type Afirma<T extends true> = T;
 export type _SummaryBate = Afirma<Exatamente<z.infer<typeof summarySchema>, Summary>>;
 export type _SerieBate = Afirma<Exatamente<z.infer<typeof serieSchema>, Serie>>;
 export type _CurvaBate = Afirma<Exatamente<z.infer<typeof curvaDISchema>, CurvaDI>>;
+
+/* ==========================================================================
+   Demais payloads de docs/data/
+   ========================================================================== */
+
+/** Serie simples {date, value} -- markets, eia, bcb e as series de analytics. */
+export interface PontoSimples {
+  date: string;
+  value: number;
+}
+
+/** markets.json: indices globais, bitcoin e Ibovespa a vista (Yahoo). */
+export type Markets = Record<string, PontoSimples[]>;
+
+/** eia.json: Brent, WTI e crack spreads dos produtos contra o Brent. */
+export type Eia = Record<string, PontoSimples[]>;
+
+/** bcb.json: CDI, Selic, IPCA e PTAX venda. */
+export type Bcb = Record<string, PontoSimples[]>;
+
+/** opcoes.json: liquidez diaria por mercadoria. */
+export interface OpcaoDia {
+  date: string;
+  mercadoria: string;
+  contratos_negociados: number;
+  volume: number;
+  negocios: number;
+}
+
+/* ----------------------------- analytics.json --------------------------- */
+
+export type Janela = '1M' | '3M' | '6M' | '12M' | 'YTD';
+
+export interface LinhaAnalytics {
+  codigo: string;
+  rotulo: string;
+  /** "R$", "US$" ou "R$/US$". Decide se ha Sharpe: nao ha taxa livre de risco
+      em US$ nos dados do repositorio. */
+  moeda: string;
+  ref: string | null;
+  ret: Partial<Record<Janela, number | null>>;
+  vol: Partial<Record<string, number | null>>;
+  dd12m: { max: number | null; vale: string | null; atual: number | null } | null;
+  /** Media aritmetica dos excessos diarios / desvio deles, anualizado. */
+  sharpe_12m: number | null;
+  /**
+   * Numerador do Sharpe, em % a.a. Pode ter SINAL OPOSTO ao de `excesso_cdi`,
+   * que e a diferenca entre retornos COMPOSTOS -- a distancia entre os dois e
+   * o arrasto de volatilidade (-sigma^2/2). Os dois estao certos; a tela
+   * precisa dos dois para nao parecer contraditoria.
+   */
+  excesso_arit_12m: number | null;
+  vol_excesso_12m: number | null;
+  extremos_12m: Record<string, { pct: number | null; data: string | null }> | null;
+  /** Diferenca de retornos compostos, em p.p. So para ativos em R$. */
+  excesso_cdi?: Partial<Record<Janela, number | null>> | undefined;
+}
+
+export interface Analytics {
+  as_of: string;
+  linhas: LinhaAnalytics[];
+  cdi: {
+    ret: Partial<Record<Janela, number | null>>;
+    ate: string | null;
+    anualizado_atual: { pct: number | null; data: string | null } | null;
+  };
+  correlacao: Record<
+    string,
+    { ativos: string[]; matriz: number[][]; n: number; inicio: string; fim: string }
+  >;
+  juro_real: {
+    cdi_12m: number | null;
+    ipca_12m: number | null;
+    real_12m: number | null;
+    janela_ini: string | null;
+    janela_fim: string | null;
+  } | null;
+  curva: {
+    ref: string;
+    ref_old: string | null;
+    prazos: { anos: number; atual: number | null; antes: number | null; var_bp: number | null }[];
+  } | null;
+  base_ind: {
+    ultimo: {
+      ind: number;
+      ibov: number;
+      pts: number;
+      pct: number;
+      venc: string | null;
+      date: string;
+    } | null;
+    serie: PontoSimples[];
+  } | null;
+  series: {
+    drawdown?: Record<string, PontoSimples[]> | undefined;
+    ibov_brl_usd?: Record<string, PontoSimples[]> | undefined;
+  };
+}

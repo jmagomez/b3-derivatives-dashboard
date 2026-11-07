@@ -15,6 +15,11 @@ import {
   summarySchema,
   seriesSchema,
   curvaDISchema,
+  marketsSchema,
+  eiaSchema,
+  bcbSchema,
+  opcoesSchema,
+  analyticsSchema,
 } from '../src/services/schemas/dashboard.schema.js';
 
 const DIR = resolve(process.argv[2] ?? join(import.meta.dirname, '..', '..', 'docs', 'data'));
@@ -24,9 +29,14 @@ const CONTRATO: Array<{ arquivo: string; schema: ZodTypeAny; obrigatorio: boolea
   { arquivo: 'summary.json', schema: summarySchema, obrigatorio: true },
   { arquivo: 'series.json', schema: seriesSchema, obrigatorio: true },
   { arquivo: 'di_curve.json', schema: curvaDISchema, obrigatorio: true },
+  { arquivo: 'markets.json', schema: marketsSchema, obrigatorio: true },
+  { arquivo: 'eia.json', schema: eiaSchema, obrigatorio: true },
+  { arquivo: 'bcb.json', schema: bcbSchema, obrigatorio: true },
+  { arquivo: 'opcoes.json', schema: opcoesSchema, obrigatorio: true },
   // analytics.json e REMOVIDO pelo pipeline quando o calculo falha, de
   // proposito (ver analytics_status no summary). Ausencia nao e erro de
   // contrato; numero velho exibido como atual seria.
+  { arquivo: 'analytics.json', schema: analyticsSchema, obrigatorio: false },
 ];
 
 let falhas = 0;
