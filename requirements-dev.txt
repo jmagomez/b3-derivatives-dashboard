@@ -1,3 +1,9 @@
 # Ferramentas de desenvolvimento (lint, format, testes)
-ruff>=0.6
+#
+# ruff fica PINADO, nao em >=: desde que `ruff check` e `ruff format --check`
+# bloqueiam a CI, uma versao nova do ruff passa a poder reprovar um commit que
+# nao tem nada a ver com ela -- regras novas entram habilitadas nas familias ja
+# selecionadas (E, F, I, UP, B). Atualizar o pino e uma mudanca deliberada, com
+# o diff do reformat junto, em vez de uma surpresa no meio de outro trabalho.
+ruff==0.16.3
 pytest>=8.0
