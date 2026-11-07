@@ -76,9 +76,7 @@ describe('SummaryGrid com o payload real', () => {
     };
     vi.stubGlobal(
       'fetch',
-      vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve(quebrado) } as Response),
-      ),
+      vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(quebrado) } as Response)),
     );
     render(envolve(<SummaryGrid />));
     expect(await screen.findByRole('alert')).toHaveTextContent(/fora do contrato/i);
