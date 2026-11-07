@@ -42,7 +42,7 @@ export function AnchorCard({ quote, serie }: Props) {
 
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="font-mono text-3xl font-semibold leading-none tabular-nums">
+          <div className="font-mono text-3xl font-semibold tabular-nums leading-none">
             {numero(quote.value)}
           </div>
           <div className="mt-1 text-xs text-muted">{quote.unit}</div>
