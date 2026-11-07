@@ -13,9 +13,13 @@ import { data as fmtData } from '@/lib/formatters';
  *
  * Recharts pesa ~430 KB nao comprimidos. Importado de forma estatica, ele ia
  * para o bundle de entrada e todo mundo que abrisse o Resumo baixava os
- * graficos das outras duas abas sem usar: 567 KB (159 KB gzip) contra os
+ * graficos das outras NOVE abas sem usar: 567 KB (159 KB gzip) contra os
  * 129 KB (36 KB gzip) de antes. Com lazy(), o Rollup o move para um chunk
- * assincrono, buscado no primeiro clique em Juros ou Commodities.
+ * assincrono (~400 KB, 110 KB gzip) buscado no primeiro clique em qualquer
+ * aba de grafico; a entrada fica em ~49 KB gzip.
+ *
+ * Cada painel tambem vira um chunk proprio de 1 a 12 KB -- abrir Cambio nao
+ * baixa o codigo de Risco & retorno.
  *
  * O Resumo NAO entra aqui, de proposito: ele e a primeira tela, e adiar o que
  * ja precisa ser mostrado so acrescentaria um salto de layout.
@@ -27,6 +31,31 @@ const PainelCommodities = lazy(() =>
   import('@/components/features/commodities/painel-commodities').then((m) => ({
     default: m.PainelCommodities,
   })),
+);
+const PainelCambio = lazy(() =>
+  import('@/components/features/cambio/painel-cambio').then((m) => ({ default: m.PainelCambio })),
+);
+const PainelCupom = lazy(() =>
+  import('@/components/features/cupom/painel-cupom').then((m) => ({ default: m.PainelCupom })),
+);
+const PainelIbovespa = lazy(() =>
+  import('@/components/features/ibovespa/painel-ibovespa').then((m) => ({
+    default: m.PainelIbovespa,
+  })),
+);
+const PainelGlobal = lazy(() =>
+  import('@/components/features/global/painel-global').then((m) => ({ default: m.PainelGlobal })),
+);
+const PainelPetroleo = lazy(() =>
+  import('@/components/features/petroleo/painel-petroleo').then((m) => ({
+    default: m.PainelPetroleo,
+  })),
+);
+const PainelOpcoes = lazy(() =>
+  import('@/components/features/opcoes/painel-opcoes').then((m) => ({ default: m.PainelOpcoes })),
+);
+const PainelRisco = lazy(() =>
+  import('@/components/features/risco/painel-risco').then((m) => ({ default: m.PainelRisco })),
 );
 
 function CarregandoPainel() {
@@ -48,7 +77,7 @@ function Cabecalho() {
           Derivativos B3 — Dashboard Diário
         </h1>
         <p className="mt-1 text-sm text-muted">
-          {data ? `Último pregão: ${fmtData(data.last_date)}` : 'Carregando o último fechamento…'}
+          {data ? `Último pregdão: ${fmtData(data.last_date)}` : 'Carregando o último fechamento…'}
         </p>
       </div>
       <ThemeToggle />
@@ -69,7 +98,7 @@ function Rodape() {
       <p className="mt-2">
         <b>Fontes assíncronas.</b> B3, BCB, EIA e Yahoo publicam em ritmos diferentes. Cada card
         mostra a data da própria série e compara com o dia útil anterior dela, não com o último
-        pregão da B3.
+        pregdão da B3.
       </p>
       <p className="mt-2">
         <b>Gráficos.</b> Cada um tem tabela equivalente sob o botão “Ver dados em tabela” — mesma
@@ -84,10 +113,22 @@ function Rodape() {
   );
 }
 
+/**
+ * Ordem deliberada: o que e cotado em TAXA primeiro (juros, cupom), depois
+ * preco local, depois o que vem de fora. Agrupar por natureza do instrumento
+ * e o que faz o leitor nao precisar reaprender a unidade a cada clique.
+ */
 const ABAS = [
   { id: 'resumo', rotulo: 'Resumo', painel: <PainelResumo /> },
   { id: 'juros', rotulo: 'Juros', painel: <PainelJuros /> },
+  { id: 'cupom', rotulo: 'Cupom cambial', painel: <PainelCupom /> },
+  { id: 'cambio', rotulo: 'Câmbio', painel: <PainelCambio /> },
+  { id: 'ibovespa', rotulo: 'Ibovespa', painel: <PainelIbovespa /> },
+  { id: 'global', rotulo: 'Global', painel: <PainelGlobal /> },
   { id: 'commodities', rotulo: 'Commodities', painel: <PainelCommodities /> },
+  { id: 'petroleo', rotulo: 'Petróleo', painel: <PainelPetroleo /> },
+  { id: 'opcoes', rotulo: 'Opções', painel: <PainelOpcoes /> },
+  { id: 'risco', rotulo: 'Risco & retorno', painel: <PainelRisco /> },
 ] as const;
 
 export function App() {
