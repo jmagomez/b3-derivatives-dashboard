@@ -101,7 +101,9 @@ describe('PainelOpcoes', () => {
   it('ordena a tabela do dia pelo volume e soma 100% de participacao', async () => {
     render(envolve(<PainelOpcoes />));
     await screen.findByText(/Liquidez por mercadoria/);
-    const soma = opcoesReal.filter((r) => r.date === '2026-11-06').reduce((s, r) => s + r.volume, 0);
+    const soma = opcoesReal
+      .filter((r) => r.date === '2026-11-06')
+      .reduce((s, r) => s + r.volume, 0);
     expect(soma).toBeGreaterThan(0);
     // DOL e o maior volume do dia na fixture; tem de ser o primeiro grafico.
     const graficos = screen
