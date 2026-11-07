@@ -29,12 +29,10 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Lint (ruff) — informativo
-        continue-on-error: true
+      - name: Lint (ruff)
         run: ruff check --output-format=github .
 
-      - name: Formatacao (ruff) — informativo
-        continue-on-error: true
+      - name: Formatacao (ruff)
         run: ruff format --check .
 
       - name: Testes (pytest)
