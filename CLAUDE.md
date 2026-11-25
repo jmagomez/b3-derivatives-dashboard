@@ -56,6 +56,23 @@ cálculo continuam no pipeline Python, que é a parte auditada.
 9. **O contrato é validado na fronteira** (Zod, `src/services/schemas/`). Payload fora do contrato
    falha explícito e localizado, em vez de virar `undefined` num gráfico vazio.
 
+## Workflows
+
+| arquivo | o que faz | quando roda | escreve no repo |
+|---|---|---|---|
+| `ci.yml` | `ruff check`, `ruff format --check`, `pytest` | push e pull request | não (`contents: read`) |
+| `deploy.yml` | typecheck, lint, prettier, testes, build e publicação no Pages | push na `main` que toque `web/**`, `docs/data/**` ou ele mesmo; ou manual | não (publica no Pages) |
+| `daily.yml` | `scripts/update.py`, commit de `data/` e `docs/`, e-mail | `0 0 * * *` (21h BRT) e retentativas `0 3,6,9,12 * * *`; ou manual | **sim** |
+| `backfill.yml` | histórico desde 2020 | só `workflow_dispatch` | **sim** |
+
+Os quatro horários extras do `daily.yml` não são redundância: a publicação espera o
+fechamento consolidado do bitcoin, e o run das 21h grava `data/` e adia `docs/` + e-mail
+quando a barra ainda não está no Yahoo. O e-mail sai uma vez por pregão
+(`steps.upd.outputs.novo`), não uma vez por execução.
+
+`daily.yml` e `backfill.yml` dividem o `concurrency: atualizacao-dados`. Dois jobs
+commitando em `data/` ao mesmo tempo é a forma mais rápida de perder histórico.
+
 ## Comandos
 - Testes (pipeline): `pip install -r requirements.txt -r requirements-dev.txt && pytest`.
 - Front: `cd web && npm ci && npm run dev` (5173). `npm run typecheck && npm run lint && npm run test`
